@@ -153,6 +153,14 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   }
 }
 
+resource oaiAccountKey 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'oaiAccountKey'
+  properties: {
+    value: oaiAccount.listKeys().key1
+  }
+}
+
 resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
   name: kvPrivateEndpointName
   location: location
