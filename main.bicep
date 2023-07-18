@@ -9,10 +9,21 @@ param chatGptDeploymentName string = 'chat'
 param chatGptDeploymentCapacity int = 1
 param chatGptModelName string = 'gpt-4'
 param virtualNetworkName string = 'vnet'
-param privateDnsZoneName string = 'privatelink.openai.azure.com'
+param oaiPrivateDnsZoneName string = 'privatelink.openai.azure.com'
+param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
 param oaiPrivateEndpointName string = 'oaiPrivateEndpoint'
+param kvPrivateEndpointName string = 'kvPrivateEndpoint'
+@description('Specifies the name of the key vault.')
+param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
+
+@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
+param tenantId string = subscription().tenantId
+
+@description('Specifies the SKU for the key vault.')
+param kvSkuName string = 'standard'
 
 var oaiSubnetId = virtualNetwork.properties.subnets[0].id
+var kvSubnetId = virtualNetwork.properties.subnets[4].id
 var gptDeployment = empty(gptDeploymentName) ? 'davinci' : gptDeploymentName
 var chatGptDeployment = empty(chatGptDeploymentName) ? 'chat' : chatGptDeploymentName
 var deployments = [
@@ -54,7 +65,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         name: 'OpenAI'
         properties: {
           addressPrefix: '10.0.0.0/27'
-          delegations: []
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
@@ -88,6 +98,24 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
       {
+        name: 'KeyVault'
+        properties: {
+          addressPrefix: '10.0.0.128/28'
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
+        name: 'VMs'
+        properties: {
+          addressPrefix: '10.0.0.144/28'
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
         name: 'AzureBastionSubnet'
         properties: {
           addressPrefix: '10.0.0.192/26'
@@ -98,6 +126,97 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
       }
     ]
     virtualNetworkPeerings: []
+  }
+}
+
+resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    tenantId: tenantId
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    accessPolicies: [
+    ]
+    sku: {
+      name: kvSkuName
+      family: 'A'
+    }
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+resource oaiAccountKey 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'oaiAccountKey'
+  properties: {
+    value: oaiAccount.listKeys().key1
+  }
+}
+
+resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
+  name: kvPrivateEndpointName
+  location: location
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: '${kvPrivateEndpointName}-connection'
+        properties: {
+          privateLinkServiceId: kv.id
+          groupIds: [
+            'vault'
+          ]
+          privateLinkServiceConnectionState: {
+            status: 'Approved'
+            description: 'Approved'
+            actionsRequired: 'None'
+          }
+        }
+      }
+    ]
+    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
+    subnet: {
+      id: kvSubnetId
+    }
+  }
+}
+
+resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: kvPrivateDnsZoneName
+  location: 'global'
+  properties: {}
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: kvPrivateDnsZone
+  name: '${kvPrivateDnsZoneName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+  parent: kvPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'config1'
+        properties: {
+          privateDnsZoneId: kvPrivateDnsZone.id
+        }
+      }
+    ]
   }
 }
 
@@ -131,8 +250,8 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01
   }
 }]
 
-resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: privateDnsZoneName
+resource oaiPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: oaiPrivateDnsZoneName
   location: 'global'
   properties: {}
   dependsOn: [
@@ -140,9 +259,9 @@ resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   ]
 }
 
-resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: privateDnsZone
-  name: '${privateDnsZoneName}-link'
+resource oaiPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: oaiPrivateDnsZone
+  name: '${oaiPrivateDnsZoneName}-link'
   location: 'global'
   properties: {
     registrationEnabled: false
@@ -187,7 +306,7 @@ resource pvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
       {
         name: 'config1'
         properties: {
-          privateDnsZoneId: privateDnsZone.id
+          privateDnsZoneId: oaiPrivateDnsZone.id
         }
       }
     ]

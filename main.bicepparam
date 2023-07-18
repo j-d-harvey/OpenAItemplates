@@ -10,5 +10,5 @@ param chatGptDeploymentName = 'chat'
 param chatGptDeploymentCapacity = 1
 param chatGptModelName = 'gpt-35-turbo'
 param virtualNetworkName = 'vnet'
-param privateDnsZoneName = 'privatelink.openai.azure.com'
+param oaiPrivateDnsZoneName = 'privatelink.openai.azure.com'
 param oaiPrivateEndpointName = 'oaiPrivateEndpoint'
