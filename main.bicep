@@ -71,45 +71,9 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
       {
-        name: 'APIM'
-        properties: {
-          addressPrefix: '10.0.0.32/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'Data'
-        properties: {
-          addressPrefix: '10.0.0.64/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'Web'
-        properties: {
-          addressPrefix: '10.0.0.96/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'KeyVault'
-        properties: {
-          addressPrefix: '10.0.0.128/28'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
         name: 'VMs'
         properties: {
-          addressPrefix: '10.0.0.144/28'
+          addressPrefix: '10.0.0.32/28'
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
@@ -126,97 +90,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
       }
     ]
     virtualNetworkPeerings: []
-  }
-}
-
-resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
-  name: keyVaultName
-  location: location
-  properties: {
-    tenantId: tenantId
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 90
-    accessPolicies: [
-    ]
-    sku: {
-      name: kvSkuName
-      family: 'A'
-    }
-    networkAcls: {
-      defaultAction: 'Deny'
-      bypass: 'AzureServices'
-    }
-  }
-}
-
-resource oaiAccountKey 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
-  parent: kv
-  name: 'oaiAccountKey'
-  properties: {
-    value: oaiAccount.listKeys().key1
-  }
-}
-
-resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
-  name: kvPrivateEndpointName
-  location: location
-  properties: {
-    privateLinkServiceConnections: [
-      {
-        name: '${kvPrivateEndpointName}-connection'
-        properties: {
-          privateLinkServiceId: kv.id
-          groupIds: [
-            'vault'
-          ]
-          privateLinkServiceConnectionState: {
-            status: 'Approved'
-            description: 'Approved'
-            actionsRequired: 'None'
-          }
-        }
-      }
-    ]
-    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
-    subnet: {
-      id: kvSubnetId
-    }
-  }
-}
-
-resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: kvPrivateDnsZoneName
-  location: 'global'
-  properties: {}
-  dependsOn: [
-    virtualNetwork
-  ]
-}
-
-resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: kvPrivateDnsZone
-  name: '${kvPrivateDnsZoneName}-link'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: virtualNetwork.id
-    }
-  }
-}
-
-resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-  parent: kvPrivateEndpoint
-  name: 'default'
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'config1'
-        properties: {
-          privateDnsZoneId: kvPrivateDnsZone.id
-        }
-      }
-    ]
   }
 }
 
