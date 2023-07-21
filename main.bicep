@@ -1,23 +1,38 @@
+@description('Location for all resources.')
 param location string = resourceGroup().location
+
+@description('Name of the Azure OpenAI account')
 param openAiAccountName string = 'oai-private-demo'
+
+@description('Custom subdomain name for the Azure OpenAI account')
 param customSubDomainName string = openAiAccountName
+
+@description('SKU for the Azure OpenAI account')
 param sku string = 'S0'
+
+@description('Tokens per Minute Rate Limit (thousands)')
+param embeddingsDeploymentCapacity int = 1
+
+@description('Name of the Embeddings Model to deploy')
+param embeddingsModelName string = 'text-embedding-ada-002'
 
 @description('Tokens per Minute Rate Limit (thousands)')
 param gptDeploymentCapacity int = 1
 
-param gptModelName string = 'text-embedding-ada-002'
-
-@description('Tokens per Minute Rate Limit (thousands)')
-param chatGptDeploymentCapacity int = 1
-
+@description('Name of the GPT Model to deploy')
 param chatGptModelName string = 'gpt-35-turbo'
+
+@description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
+
+@description('Name of the Azure OpenaAI Private DNS Zone')
 param oaiPrivateDnsZoneName string = 'privatelink.openai.azure.com'
+
+@description('Name of the Azure OpenaAI Private Endpoint')
 param oaiPrivateEndpointName string = 'oaiPrivateEndpoint'
 
 @description('The name of the Azure Bastion host')
-param bastionHostName string = 'bastion1'
+param bastionHostName string = 'bastion-oai-demo'
 
 @description('Username for the Virtual Machine.')
 param adminUsername string
@@ -64,18 +79,18 @@ var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
 var extensionVersion = '1.0'
 var maaTenantName = 'GuestAttestation'
 var maaEndpoint = substring('emptyString', 0, 0)
-var gptDeployment = empty(gptModelName) ? 'davinci' : gptModelName
+var gptDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
 var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
   {
     name: gptDeployment
     model: {
       format: 'OpenAI'
-      name: gptModelName
+      name: embeddingsModelName
     }
     sku: {
       name: 'Standard'
-      capacity: gptDeploymentCapacity
+      capacity: embeddingsDeploymentCapacity
     }
   }
   {
@@ -86,7 +101,7 @@ var deployments = [
     }
     sku: {
       name: 'Standard'
-      capacity: chatGptDeploymentCapacity
+      capacity: gptDeploymentCapacity
     }
   }
 ]
@@ -181,7 +196,7 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01
 }]
 
 resource oaiPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: oaiPrivateDnsZoneName
+  name: 'privatelink.openai.azure.com'
   location: 'global'
   properties: {}
   dependsOn: [
@@ -326,7 +341,7 @@ resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' =
 }
 
 resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
-  name: '${bastionHostName}-pip'
+  name: 'pip-${bastionHostName}'
   location: location
   properties: {
     publicIPAllocationMethod: 'Static'
