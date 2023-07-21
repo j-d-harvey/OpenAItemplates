@@ -107,7 +107,7 @@ var deployments = [
 ]
 
 resource basicNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
-  name: 'nsg-basic'
+  name: 'nsg-basic-oai-demo'
   location: location
   properties: {
     securityRules: []
