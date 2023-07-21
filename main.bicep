@@ -5,22 +5,22 @@ param location string = resourceGroup().location
 param openAiAccountName string = 'oai-private-demo'
 
 @description('Custom subdomain name for the Azure OpenAI account')
-param customSubDomainName string = openAiAccountName
+param customSubDomainName string
 
 @description('SKU for the Azure OpenAI account')
 param sku string = 'S0'
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param embeddingsDeploymentCapacity int = 1
+param embeddingsDeploymentCapacity int
 
 @description('Name of the Embeddings Model to deploy')
-param embeddingsModelName string = 'text-embedding-ada-002'
+param embeddingsModelName string
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param gptDeploymentCapacity int = 1
+param gptDeploymentCapacity int
 
 @description('Name of the GPT Model to deploy')
-param chatGptModelName string = 'gpt-35-turbo'
+param chatGptModelName string
 
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
@@ -29,15 +29,15 @@ param virtualNetworkName string = 'vnet-oai-demo'
 param oaiPrivateDnsZoneName string = 'privatelink.openai.azure.com'
 
 @description('Name of the Azure OpenaAI Private Endpoint')
-param oaiPrivateEndpointName string = 'oaiPrivateEndpoint'
+param oaiPrivateEndpointName string = 'oaiDemoPrivateEndpoint'
 
 @description('The name of the Azure Bastion host')
 param bastionHostName string = 'bastion-oai-demo'
 
-@description('Username for the Virtual Machine.')
+@description('Admin Username for the Virtual Machine.')
 param adminUsername string
 
-@description('Password for the Virtual Machine.')
+@description('Admin Password for the Virtual Machine.')
 @minLength(12)
 @secure()
 param adminPassword string
@@ -79,11 +79,11 @@ var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
 var extensionVersion = '1.0'
 var maaTenantName = 'GuestAttestation'
 var maaEndpoint = substring('emptyString', 0, 0)
-var gptDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
+var embeddingsDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
 var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
   {
-    name: gptDeployment
+    name: embeddingsDeployment
     model: {
       format: 'OpenAI'
       name: embeddingsModelName
