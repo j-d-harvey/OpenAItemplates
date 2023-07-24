@@ -1,4 +1,4 @@
-@description('Location for all resources.')
+@description('Location for all resources')
 param location string = resourceGroup().location
 
 @description('Name of the Azure OpenAI account')
