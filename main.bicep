@@ -1,41 +1,96 @@
+@description('Location for all resources')
 param location string = resourceGroup().location
-param openAiAccountName string = 'oaitst'
-param customSubDomainName string = openAiAccountName
+
+@description('Name of the Azure OpenAI account')
+param openAiAccountName string = 'oai-private-demo'
+
+@description('Custom subdomain name for the Azure OpenAI account')
+param customSubDomainName string
+
+@description('SKU for the Azure OpenAI account')
 param sku string = 'S0'
-param gptDeploymentName string = 'ada'
-param gptDeploymentCapacity int = 1
-param gptModelName string = 'text-embedding-ada-002'
-param chatGptDeploymentName string = 'chat'
-param chatGptDeploymentCapacity int = 1
-param chatGptModelName string = 'gpt-4'
-param virtualNetworkName string = 'vnet'
+
+@description('Tokens per Minute Rate Limit (thousands)')
+param embeddingsDeploymentCapacity int
+
+@description('Name of the Embeddings Model to deploy')
+param embeddingsModelName string
+
+@description('Tokens per Minute Rate Limit (thousands)')
+param gptDeploymentCapacity int
+
+@description('Name of the GPT Model to deploy')
+param chatGptModelName string
+
+@description('Name of the Azure Virtual Network')
+param virtualNetworkName string = 'vnet-oai-demo'
+
+@description('Name of the Azure OpenaAI Private DNS Zone')
 param oaiPrivateDnsZoneName string = 'privatelink.openai.azure.com'
-param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
-param oaiPrivateEndpointName string = 'oaiPrivateEndpoint'
-param kvPrivateEndpointName string = 'kvPrivateEndpoint'
-@description('Specifies the name of the key vault.')
-param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
 
-@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
-param tenantId string = subscription().tenantId
+@description('Name of the Azure OpenaAI Private Endpoint')
+param oaiPrivateEndpointName string = 'oaiDemoPrivateEndpoint'
 
-@description('Specifies the SKU for the key vault.')
-param kvSkuName string = 'standard'
+@description('The name of the Azure Bastion host')
+param bastionHostName string = 'bastion-oai-demo'
 
-var oaiSubnetId = virtualNetwork.properties.subnets[0].id
-var kvSubnetId = virtualNetwork.properties.subnets[4].id
-var gptDeployment = empty(gptDeploymentName) ? 'davinci' : gptDeploymentName
-var chatGptDeployment = empty(chatGptDeploymentName) ? 'chat' : chatGptDeploymentName
+@description('Admin Username for the Virtual Machine.')
+param adminUsername string
+
+@description('Admin Password for the Virtual Machine.')
+@minLength(12)
+@secure()
+param adminPassword string
+
+@description('The Windows version for the VM. This will pick a fully patched image of this given Windows version.')
+@allowed([
+  'win11-22h2-pro'
+  'win11-22h2-pron'
+  'win11-22h2-pro-zh-cn'
+  'win11-22h2-ent'
+  '2019-datacenter-zhcn-g2'
+  '2022-datacenter-azure-edition'
+  '2022-datacenter-g2'
+])
+param OSVersion string = 'win11-22h2-ent'
+
+@description('Size of the virtual machine.')
+param vmSize string = 'Standard_D2s_v5'
+
+@description('Name of the virtual machine.')
+param vmName string = 'vm-oai-demo'
+
+@description('Security Type of the Virtual Machine.')
+@allowed([
+  'Standard'
+  'TrustedLaunch'
+])
+param securityType string = 'TrustedLaunch'
+
+var securityProfileJson = {
+  uefiSettings: {
+    secureBootEnabled: true
+    vTpmEnabled: true
+  }
+  securityType: securityType
+}
+var extensionName = 'GuestAttestation'
+var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
+var extensionVersion = '1.0'
+var maaTenantName = 'GuestAttestation'
+var maaEndpoint = substring('emptyString', 0, 0)
+var embeddingsDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
+var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
   {
-    name: gptDeployment
+    name: embeddingsDeployment
     model: {
       format: 'OpenAI'
-      name: gptModelName
+      name: embeddingsModelName
     }
     sku: {
       name: 'Standard'
-      capacity: gptDeploymentCapacity
+      capacity: embeddingsDeploymentCapacity
     }
   }
   {
@@ -46,10 +101,18 @@ var deployments = [
     }
     sku: {
       name: 'Standard'
-      capacity: chatGptDeploymentCapacity
+      capacity: gptDeploymentCapacity
     }
   }
 ]
+
+resource basicNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
+  name: 'nsg-basic-oai-demo'
+  location: location
+  properties: {
+    securityRules: []
+  }
+}
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
   name: virtualNetworkName
@@ -65,43 +128,10 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         name: 'OpenAI'
         properties: {
           addressPrefix: '10.0.0.0/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'APIM'
-        properties: {
-          addressPrefix: '10.0.0.32/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'Data'
-        properties: {
-          addressPrefix: '10.0.0.64/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'Web'
-        properties: {
-          addressPrefix: '10.0.0.96/27'
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'KeyVault'
-        properties: {
-          addressPrefix: '10.0.0.128/28'
-          privateEndpointNetworkPolicies: 'Disabled'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
+          privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
@@ -109,8 +139,11 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
       {
         name: 'VMs'
         properties: {
-          addressPrefix: '10.0.0.144/28'
-          privateEndpointNetworkPolicies: 'Disabled'
+          addressPrefix: '10.0.0.32/28'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
+          privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
@@ -119,6 +152,9 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         name: 'AzureBastionSubnet'
         properties: {
           addressPrefix: '10.0.0.192/26'
+          networkSecurityGroup: {
+            id: bastionNSG.id
+          }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
@@ -129,104 +165,13 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
   }
 }
 
-resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
-  name: keyVaultName
-  location: location
-  properties: {
-    tenantId: tenantId
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 90
-    accessPolicies: [
-    ]
-    sku: {
-      name: kvSkuName
-      family: 'A'
-    }
-    networkAcls: {
-      defaultAction: 'Deny'
-      bypass: 'AzureServices'
-    }
-  }
-}
-
-resource oaiAccountKey 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
-  parent: kv
-  name: 'oaiAccountKey'
-  properties: {
-    value: oaiAccount.listKeys().key1
-  }
-}
-
-resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
-  name: kvPrivateEndpointName
-  location: location
-  properties: {
-    privateLinkServiceConnections: [
-      {
-        name: '${kvPrivateEndpointName}-connection'
-        properties: {
-          privateLinkServiceId: kv.id
-          groupIds: [
-            'vault'
-          ]
-          privateLinkServiceConnectionState: {
-            status: 'Approved'
-            description: 'Approved'
-            actionsRequired: 'None'
-          }
-        }
-      }
-    ]
-    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
-    subnet: {
-      id: kvSubnetId
-    }
-  }
-}
-
-resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: kvPrivateDnsZoneName
-  location: 'global'
-  properties: {}
-  dependsOn: [
-    virtualNetwork
-  ]
-}
-
-resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: kvPrivateDnsZone
-  name: '${kvPrivateDnsZoneName}-link'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: virtualNetwork.id
-    }
-  }
-}
-
-resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-  parent: kvPrivateEndpoint
-  name: 'default'
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'config1'
-        properties: {
-          privateDnsZoneId: kvPrivateDnsZone.id
-        }
-      }
-    ]
-  }
-}
-
 resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   name: openAiAccountName
   location: location
   kind: 'OpenAI'
   properties: {
     customSubDomainName: customSubDomainName
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
   }
   sku: {
     name: sku
@@ -251,7 +196,7 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01
 }]
 
 resource oaiPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: oaiPrivateDnsZoneName
+  name: 'privatelink.openai.azure.com'
   location: 'global'
   properties: {}
   dependsOn: [
@@ -293,7 +238,7 @@ resource oaiPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
     ]
     customNetworkInterfaceName: '${oaiPrivateEndpointName}-nic'
     subnet: {
-      id: oaiSubnetId
+      id: '${virtualNetwork.id}/subnets/OpenAI'
     }
   }
 }
@@ -307,6 +252,271 @@ resource pvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
         name: 'config1'
         properties: {
           privateDnsZoneId: oaiPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
+resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
+  name: '${vmName}-nic'
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'ipconfig1'
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: '${virtualNetwork.id}/subnets/VMs'
+          }
+        }
+      }
+    ]
+  }
+}
+
+resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
+  name: vmName
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: vmSize
+    }
+    osProfile: {
+      computerName: vmName
+      adminUsername: adminUsername
+      adminPassword: adminPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoftwindowsdesktop'
+        offer: 'windows-11'
+        sku: OSVersion
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: []
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: vmNic.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: false
+      }
+    }
+    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : null)
+  }
+}
+
+resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = if ((securityType == 'TrustedLaunch') && ((securityProfileJson.uefiSettings.secureBootEnabled == true) && (securityProfileJson.uefiSettings.vTpmEnabled == true))) {
+  parent: vm
+  name: extensionName
+  location: location
+  properties: {
+    publisher: extensionPublisher
+    type: extensionName
+    typeHandlerVersion: extensionVersion
+    autoUpgradeMinorVersion: true
+    enableAutomaticUpgrade: true
+    settings: {
+      AttestationConfig: {
+        MaaSettings: {
+          maaEndpoint: maaEndpoint
+          maaTenantName: maaTenantName
+        }
+      }
+    }
+  }
+}
+
+resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
+  name: 'pip-${bastionHostName}'
+  location: location
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+  sku: {
+    name: 'Standard'
+  }
+}
+
+resource bastionHost 'Microsoft.Network/bastionHosts@2022-07-01' = {
+  name: bastionHostName
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        properties: {
+          subnet: {
+            id: '${virtualNetwork.id}/subnets/AzureBastionSubnet'
+          }
+          publicIPAddress: {
+            id: bastionPublicIP.id
+          }
+          privateIPAllocationMethod: 'Dynamic'
+        }
+        name: 'ipconfig1'
+      }
+    ]
+  }
+}
+
+resource bastionNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
+  name: 'nsg-${bastionHostName}'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowHttpsInBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'Internet'
+          destinationPortRange: '443'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowGatewayManagerInBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'GatewayManager'
+          destinationPortRange: '443'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 110
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowLoadBalancerInBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationPortRange: '443'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 120
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowBastionHostCommunicationInBound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRanges: [
+            '8080'
+            '5701'
+          ]
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 130
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'DenyAllInBound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowSshRdpOutBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRanges: [
+            '22'
+            '3389'
+          ]
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowAzureCloudCommunicationOutBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationPortRange: '443'
+          destinationAddressPrefix: 'AzureCloud'
+          access: 'Allow'
+          priority: 110
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowBastionHostCommunicationOutBound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationPortRanges: [
+            '8080'
+            '5701'
+          ]
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 120
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'AllowGetSessionInformationOutBound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: 'Internet'
+          destinationPortRanges: [
+            '80'
+            '443'
+          ]
+          access: 'Allow'
+          priority: 130
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'DenyAllOutBound'
+        properties: {
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '*'
+          access: 'Deny'
+          priority: 1000
+          direction: 'Outbound'
         }
       }
     ]
