@@ -8,7 +8,7 @@ param openAiAccountName string = 'oai-private-demo'
 param customSubDomainName string
 
 @description('SKU for the Azure OpenAI account')
-param sku string = 'S0'
+param oaiSku string = 'S0'
 
 @description('Tokens per Minute Rate Limit (thousands)')
 param embeddingsDeploymentCapacity int
@@ -21,6 +21,27 @@ param gptDeploymentCapacity int
 
 @description('Name of the GPT Model to deploy')
 param chatGptModelName string
+
+@description('The pricing tier of the API Management service')
+@allowed([
+  'Developer'
+  'Premium'
+])
+param apimSku string = 'Developer'
+
+@description('Number of instances of the API Management service to deploy')
+param apimCapacity int = 1
+
+@description('Name of the API Management service')
+param apimName string = 'apim-${uniqueString(resourceGroup().id)}'
+
+@description('The email address of the owner of the API Management service')
+@minLength(1)
+param publisherEmail string
+
+@description('The name of the owner of the API Management service')
+@minLength(1)
+param publisherName string
 
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
@@ -160,9 +181,21 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
       {
+        name: 'APIM'
+        properties: {
+          addressPrefix: '10.0.0.64/27'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
         name: 'PrivateEndpoints'
         properties: {
-          addressPrefix: '10.0.0.64/28'
+          addressPrefix: '10.0.0.128/27'
           networkSecurityGroup: {
             id: basicNSG.id
           }
@@ -197,7 +230,7 @@ resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
     publicNetworkAccess: 'Disabled'
   }
   sku: {
-    name: sku
+    name: oaiSku
   }
   dependsOn: [
     virtualNetwork
@@ -368,6 +401,23 @@ resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZon
         }
       }
     ]
+  }
+}
+
+resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
+  name: apimName
+  location: location
+  sku: {
+    name: apimSku
+    capacity: apimCapacity
+  }
+  properties: {
+    publisherEmail: publisherEmail
+    publisherName: publisherName
+    virtualNetworkType: 'External'
+    virtualNetworkConfiguration: {
+      subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
+    }
   }
 }
 
