@@ -5,7 +5,7 @@ param location string = resourceGroup().location
 param openAiAccountName string = 'oai-private-demo'
 
 @description('Custom subdomain name for the Azure OpenAI account')
-param customSubDomainName string
+param oaiCustomSubDomainName string = 'oai-${uniqueString(resourceGroup().id)}'
 
 @description('SKU for the Azure OpenAI account')
 param oaiSku string = 'S0'
@@ -37,11 +37,11 @@ param apimName string = 'apim-${uniqueString(resourceGroup().id)}'
 
 @description('The email address of the owner of the API Management service')
 @minLength(1)
-param publisherEmail string
+param apimPublisherEmail string
 
 @description('The name of the owner of the API Management service')
 @minLength(1)
-param publisherName string
+param apimPublisherName string
 
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
@@ -56,12 +56,12 @@ param oaiPrivateEndpointName string = 'oaiDemoPrivateEndpoint'
 param bastionHostName string = 'bastion-oai-demo'
 
 @description('Admin Username for the Virtual Machine.')
-param adminUsername string
+param vmAdminUsername string
 
 @description('Admin Password for the Virtual Machine.')
 @minLength(12)
 @secure()
-param adminPassword string
+param vmAdminPassword string
 
 @description('The Windows version for the VM. This will pick a fully patched image of this given Windows version.')
 @allowed([
@@ -226,7 +226,7 @@ resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   location: location
   kind: 'OpenAI'
   properties: {
-    customSubDomainName: customSubDomainName
+    customSubDomainName: oaiCustomSubDomainName
     publicNetworkAccess: 'Disabled'
   }
   sku: {
@@ -412,8 +412,8 @@ resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
     capacity: apimCapacity
   }
   properties: {
-    publisherEmail: publisherEmail
-    publisherName: publisherName
+    publisherEmail: apimPublisherEmail
+    publisherName: apimPublisherName
     virtualNetworkType: 'Internal'
     virtualNetworkConfiguration: {
       subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
@@ -448,8 +448,8 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
     }
     osProfile: {
       computerName: vmName
-      adminUsername: adminUsername
-      adminPassword: adminPassword
+      adminUsername: vmAdminUsername
+      adminPassword: vmAdminPassword
     }
     storageProfile: {
       imageReference: {
