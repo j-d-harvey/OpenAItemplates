@@ -414,7 +414,7 @@ resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
   properties: {
     publisherEmail: publisherEmail
     publisherName: publisherName
-    virtualNetworkType: 'External'
+    virtualNetworkType: 'Internal'
     virtualNetworkConfiguration: {
       subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
     }
