@@ -67,6 +67,17 @@ param vmName string = 'vm-oai-demo'
 ])
 param securityType string = 'TrustedLaunch'
 
+param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
+param kvPrivateEndpointName string = 'kvPrivateEndpoint'
+@description('Specifies the name of the key vault.')
+param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
+
+@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
+param tenantId string = subscription().tenantId
+
+@description('Specifies the SKU for the key vault.')
+param kvSkuName string = 'standard'
+
 var securityProfileJson = {
   uefiSettings: {
     secureBootEnabled: true
@@ -143,6 +154,18 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: basicNSG.id
           }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
+        name: 'PrivateEndpoints'
+        properties: {
+          addressPrefix: '10.0.0.64/28'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
@@ -156,7 +179,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
             id: bastionNSG.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -252,6 +275,96 @@ resource pvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
         name: 'config1'
         properties: {
           privateDnsZoneId: oaiPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
+resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    tenantId: tenantId
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    accessPolicies: []
+    sku: {
+      name: kvSkuName
+      family: 'A'
+    }
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+resource oaiAccountKey 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'oaiAccountKey'
+  properties: {
+    value: oaiAccount.listKeys().key1
+  }
+}
+
+resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
+  name: kvPrivateEndpointName
+  location: location
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: '${kvPrivateEndpointName}-connection'
+        properties: {
+          privateLinkServiceId: kv.id
+          groupIds: [
+            'vault'
+          ]
+          privateLinkServiceConnectionState: {
+            status: 'Approved'
+            description: 'Approved'
+            actionsRequired: 'None'
+          }
+        }
+      }
+    ]
+    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
+    subnet: {
+      id: '${virtualNetwork.id}/subnets/PrivateEndpoints'
+    }
+  }
+}
+
+resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: kvPrivateDnsZoneName
+  location: 'global'
+  properties: {}
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: kvPrivateDnsZone
+  name: '${kvPrivateDnsZoneName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+  parent: kvPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'config1'
+        properties: {
+          privateDnsZoneId: kvPrivateDnsZone.id
         }
       }
     ]
