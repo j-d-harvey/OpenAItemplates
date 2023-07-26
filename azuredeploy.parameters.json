@@ -2,9 +2,6 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "customSubDomainName": {
-      "value": "GEN-UNIQUE"
-    },
     "embeddingsDeploymentCapacity": {
       "value": 10
     },
@@ -17,11 +14,8 @@
     "chatGptModelName": {
       "value": "gpt-35-turbo"
     },
-    "adminUsername": {
+    "vmAdminUsername": {
       "value": "oaiadmin"
-    },
-    "adminPassword": {
-      "value": "GEN-PASSWORD"
     }
   }
 }

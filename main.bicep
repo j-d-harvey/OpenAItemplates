@@ -5,10 +5,10 @@ param location string = resourceGroup().location
 param openAiAccountName string = 'oai-private-demo'
 
 @description('Custom subdomain name for the Azure OpenAI account')
-param customSubDomainName string
+param oaiCustomSubDomainName string = 'oai-${uniqueString(resourceGroup().id)}'
 
 @description('SKU for the Azure OpenAI account')
-param sku string = 'S0'
+param oaiSku string = 'S0'
 
 @description('Tokens per Minute Rate Limit (thousands)')
 param embeddingsDeploymentCapacity int
@@ -21,6 +21,27 @@ param gptDeploymentCapacity int
 
 @description('Name of the GPT Model to deploy')
 param chatGptModelName string
+
+@description('The pricing tier of the API Management service')
+@allowed([
+  'Developer'
+  'Premium'
+])
+param apimSku string = 'Developer'
+
+@description('Number of instances of the API Management service to deploy')
+param apimCapacity int = 1
+
+@description('Name of the API Management service')
+param apimName string = 'apim-${uniqueString(resourceGroup().id)}'
+
+@description('The email address of the owner of the API Management service')
+@minLength(1)
+param apimPublisherEmail string
+
+@description('The name of the owner of the API Management service')
+@minLength(1)
+param apimPublisherName string
 
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
@@ -35,12 +56,12 @@ param oaiPrivateEndpointName string = 'oaiDemoPrivateEndpoint'
 param bastionHostName string = 'bastion-oai-demo'
 
 @description('Admin Username for the Virtual Machine.')
-param adminUsername string
+param vmAdminUsername string
 
 @description('Admin Password for the Virtual Machine.')
 @minLength(12)
 @secure()
-param adminPassword string
+param vmAdminPassword string
 
 @description('The Windows version for the VM. This will pick a fully patched image of this given Windows version.')
 @allowed([
@@ -66,6 +87,17 @@ param vmName string = 'vm-oai-demo'
   'TrustedLaunch'
 ])
 param securityType string = 'TrustedLaunch'
+
+param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
+param kvPrivateEndpointName string = 'kvPrivateEndpoint'
+@description('Specifies the name of the key vault.')
+param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
+
+@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
+param tenantId string = subscription().tenantId
+
+@description('Specifies the SKU for the key vault.')
+param kvSkuName string = 'standard'
 
 var securityProfileJson = {
   uefiSettings: {
@@ -143,6 +175,30 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: basicNSG.id
           }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
+        name: 'APIM'
+        properties: {
+          addressPrefix: '10.0.0.64/27'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+      {
+        name: 'PrivateEndpoints'
+        properties: {
+          addressPrefix: '10.0.0.128/27'
+          networkSecurityGroup: {
+            id: basicNSG.id
+          }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
@@ -156,7 +212,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
             id: bastionNSG.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -170,11 +226,11 @@ resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   location: location
   kind: 'OpenAI'
   properties: {
-    customSubDomainName: customSubDomainName
+    customSubDomainName: oaiCustomSubDomainName
     publicNetworkAccess: 'Disabled'
   }
   sku: {
-    name: sku
+    name: oaiSku
   }
   dependsOn: [
     virtualNetwork
@@ -243,7 +299,7 @@ resource oaiPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
   }
 }
 
-resource pvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+resource oaiPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
   parent: oaiPrivateEndpoint
   name: 'default'
   properties: {
@@ -255,6 +311,113 @@ resource pvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
         }
       }
     ]
+  }
+}
+
+resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    tenantId: tenantId
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    accessPolicies: []
+    sku: {
+      name: kvSkuName
+      family: 'A'
+    }
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+resource oaiAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'oaiAccountKey'
+  properties: {
+    value: oaiAccount.listKeys().key1
+  }
+}
+
+resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
+  name: kvPrivateEndpointName
+  location: location
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: '${kvPrivateEndpointName}-connection'
+        properties: {
+          privateLinkServiceId: kv.id
+          groupIds: [
+            'vault'
+          ]
+          privateLinkServiceConnectionState: {
+            status: 'Approved'
+            description: 'Approved'
+            actionsRequired: 'None'
+          }
+        }
+      }
+    ]
+    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
+    subnet: {
+      id: '${virtualNetwork.id}/subnets/PrivateEndpoints'
+    }
+  }
+}
+
+resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: kvPrivateDnsZoneName
+  location: 'global'
+  properties: {}
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: kvPrivateDnsZone
+  name: '${kvPrivateDnsZoneName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+  parent: kvPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'config1'
+        properties: {
+          privateDnsZoneId: kvPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
+resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
+  name: apimName
+  location: location
+  sku: {
+    name: apimSku
+    capacity: apimCapacity
+  }
+  properties: {
+    publisherEmail: apimPublisherEmail
+    publisherName: apimPublisherName
+    virtualNetworkType: 'Internal'
+    virtualNetworkConfiguration: {
+      subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
+    }
   }
 }
 
@@ -285,8 +448,8 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
     }
     osProfile: {
       computerName: vmName
-      adminUsername: adminUsername
-      adminPassword: adminPassword
+      adminUsername: vmAdminUsername
+      adminPassword: vmAdminPassword
     }
     storageProfile: {
       imageReference: {
