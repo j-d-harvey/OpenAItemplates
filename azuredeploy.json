@@ -296,7 +296,7 @@
             "properties": {
               "addressPrefix": "10.0.0.64/27",
               "networkSecurityGroup": {
-                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-apim-oai-demo')]"
               },
               "privateEndpointNetworkPolicies": "Disabled",
               "privateLinkServiceNetworkPolicies": "Disabled"
@@ -331,6 +331,7 @@
         "virtualNetworkPeerings": []
       },
       "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-apim-oai-demo')]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}', parameters('bastionHostName')))]"
       ]
@@ -577,6 +578,42 @@
       "dependsOn": [
         "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
       ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2022-07-01",
+      "name": "nsg-apim-oai-demo",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowManagementEndpointInBound",
+            "properties": {
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "ApiManagement",
+              "destinationPortRange": "3443",
+              "destinationAddressPrefix": "VirtualNetwork",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "AllowInfrastructureLoadBalancerInBound",
+            "properties": {
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationPortRange": "6390",
+              "destinationAddressPrefix": "VirtualNetwork",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
     },
     {
       "type": "Microsoft.Network/networkInterfaces",
