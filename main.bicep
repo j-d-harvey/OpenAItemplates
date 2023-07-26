@@ -185,7 +185,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         properties: {
           addressPrefix: '10.0.0.64/27'
           networkSecurityGroup: {
-            id: basicNSG.id
+            id: apimNSG.id
           }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Disabled'
@@ -418,6 +418,41 @@ resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
     virtualNetworkConfiguration: {
       subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
     }
+  }
+}
+
+resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
+  name: 'nsg-apim-oai-demo'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowManagementEndpointInBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'ApiManagement'
+          destinationPortRange: '3443'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'AllowInfrastructureLoadBalancerInBound'
+        properties: {
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationPortRange: '6390'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 110
+          direction: 'Inbound'
+        }
+      }
+    ]
   }
 }
 
