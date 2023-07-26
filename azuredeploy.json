@@ -1,13 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-  "metadata": {
-    "_generator": {
-      "name": "bicep",
-      "version": "0.19.5.34762",
-      "templateHash": "4743961386174586445"
-    }
-  },
   "parameters": {
     "location": {
       "type": "string",
@@ -23,13 +16,14 @@
         "description": "Name of the Azure OpenAI account"
       }
     },
-    "customSubDomainName": {
+    "oaiCustomSubDomainName": {
       "type": "string",
+      "defaultValue": "[format('oai-{0}', uniqueString(resourceGroup().id))]",
       "metadata": {
         "description": "Custom subdomain name for the Azure OpenAI account"
       }
     },
-    "sku": {
+    "oaiSku": {
       "type": "string",
       "defaultValue": "S0",
       "metadata": {
@@ -60,6 +54,45 @@
         "description": "Name of the GPT Model to deploy"
       }
     },
+    "apimSku": {
+      "type": "string",
+      "defaultValue": "Developer",
+      "allowedValues": [
+        "Developer",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "The pricing tier of the API Management service"
+      }
+    },
+    "apimCapacity": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Number of instances of the API Management service to deploy"
+      }
+    },
+    "apimName": {
+      "type": "string",
+      "defaultValue": "[format('apim-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the API Management service"
+      }
+    },
+    "apimPublisherEmail": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The email address of the owner of the API Management service"
+      }
+    },
+    "apimPublisherName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the owner of the API Management service"
+      }
+    },
     "virtualNetworkName": {
       "type": "string",
       "defaultValue": "vnet-oai-demo",
@@ -88,13 +121,13 @@
         "description": "The name of the Azure Bastion host"
       }
     },
-    "adminUsername": {
+    "vmAdminUsername": {
       "type": "string",
       "metadata": {
         "description": "Admin Username for the Virtual Machine."
       }
     },
-    "adminPassword": {
+    "vmAdminPassword": {
       "type": "securestring",
       "minLength": 12,
       "metadata": {
@@ -140,6 +173,35 @@
       ],
       "metadata": {
         "description": "Security Type of the Virtual Machine."
+      }
+    },
+    "kvPrivateDnsZoneName": {
+      "type": "string",
+      "defaultValue": "privatelink.vaultcore.azure.net"
+    },
+    "kvPrivateEndpointName": {
+      "type": "string",
+      "defaultValue": "kvPrivateEndpoint"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[format('kv{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Specifies the name of the key vault."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
+      }
+    },
+    "kvSkuName": {
+      "type": "string",
+      "defaultValue": "standard",
+      "metadata": {
+        "description": "Specifies the SKU for the key vault."
       }
     }
   },
@@ -224,6 +286,30 @@
               "networkSecurityGroup": {
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
               },
+              "privateEndpointNetworkPolicies": "Disabled",
+              "privateLinkServiceNetworkPolicies": "Disabled"
+            },
+            "type": "Microsoft.Network/virtualNetworks/subnets"
+          },
+          {
+            "name": "APIM",
+            "properties": {
+              "addressPrefix": "10.0.0.64/27",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
+              },
+              "privateEndpointNetworkPolicies": "Disabled",
+              "privateLinkServiceNetworkPolicies": "Disabled"
+            },
+            "type": "Microsoft.Network/virtualNetworks/subnets"
+          },
+          {
+            "name": "PrivateEndpoints",
+            "properties": {
+              "addressPrefix": "10.0.0.128/27",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
+              },
               "privateEndpointNetworkPolicies": "Enabled",
               "privateLinkServiceNetworkPolicies": "Enabled"
             },
@@ -237,7 +323,7 @@
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}', parameters('bastionHostName')))]"
               },
               "privateEndpointNetworkPolicies": "Disabled",
-              "privateLinkServiceNetworkPolicies": "Enabled"
+              "privateLinkServiceNetworkPolicies": "Disabled"
             },
             "type": "Microsoft.Network/virtualNetworks/subnets"
           }
@@ -256,11 +342,11 @@
       "location": "[parameters('location')]",
       "kind": "OpenAI",
       "properties": {
-        "customSubDomainName": "[parameters('customSubDomainName')]",
+        "customSubDomainName": "[parameters('oaiCustomSubDomainName')]",
         "publicNetworkAccess": "Disabled"
       },
       "sku": {
-        "name": "[parameters('sku')]"
+        "name": "[parameters('oaiSku')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
@@ -363,6 +449,136 @@
       ]
     },
     {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "tenantId": "[parameters('tenantId')]",
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 90,
+        "accessPolicies": [],
+        "sku": {
+          "name": "[parameters('kvSkuName')]",
+          "family": "A"
+        },
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'oaiAccountKey')]",
+      "properties": {
+        "value": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiAccountName')), '2023-05-01').key1]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2022-11-01",
+      "name": "[parameters('kvPrivateEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "privateLinkServiceConnections": [
+          {
+            "name": "[format('{0}-connection', parameters('kvPrivateEndpointName'))]",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "groupIds": [
+                "vault"
+              ],
+              "privateLinkServiceConnectionState": {
+                "status": "Approved",
+                "description": "Approved",
+                "actionsRequired": "None"
+              }
+            }
+          }
+        ],
+        "customNetworkInterfaceName": "[format('{0}-nic', parameters('kvPrivateEndpointName'))]",
+        "subnet": {
+          "id": "[format('{0}/subnets/PrivateEndpoints', resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[parameters('kvPrivateDnsZoneName')]",
+      "location": "global",
+      "properties": {},
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('kvPrivateDnsZoneName'), format('{0}-link', parameters('kvPrivateDnsZoneName')))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('kvPrivateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2021-05-01",
+      "name": "[format('{0}/{1}', parameters('kvPrivateEndpointName'), 'default')]",
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "config1",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('kvPrivateDnsZoneName'))]"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('kvPrivateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/privateEndpoints', parameters('kvPrivateEndpointName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[parameters('apimName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('apimSku')]",
+        "capacity": "[parameters('apimCapacity')]"
+      },
+      "properties": {
+        "publisherEmail": "[parameters('apimPublisherEmail')]",
+        "publisherName": "[parameters('apimPublisherName')]",
+        "virtualNetworkType": "Internal",
+        "virtualNetworkConfiguration": {
+          "subnetResourceId": "[format('{0}/subnets/APIM', resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.Network/networkInterfaces",
       "apiVersion": "2022-05-01",
       "name": "[format('{0}-nic', parameters('vmName'))]",
@@ -395,8 +611,8 @@
         },
         "osProfile": {
           "computerName": "[parameters('vmName')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]"
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
         },
         "storageProfile": {
           "imageReference": {
