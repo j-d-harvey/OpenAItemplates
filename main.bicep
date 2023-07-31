@@ -220,6 +220,29 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
   }
 }
 
+// Log Analytics Workspace and Application Insights resources
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: applicationInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
+
+// OpenAI Account resources
 resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   name: openAiAccountName
   location: location
@@ -313,6 +336,25 @@ resource oaiPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZo
   }
 }
 
+resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: oaiAccount
+  name: '${openAiAccountName}-diags'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+        retentionPolicy: {
+          enabled: true
+          days: 90
+        }
+      }
+    ]
+  }
+}
+
+// Key Vault Resources
 resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   name: keyVaultName
   location: location
@@ -340,7 +382,6 @@ resource oaiAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-previ
   }
 }
 
-// Key Vault Resources
 resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
   name: kvPrivateEndpointName
   location: location
@@ -441,6 +482,63 @@ resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
         }
       }
     ]
+  }
+}
+
+resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
+  parent: apim
+  name: 'appInsightsLogger'
+  properties: {
+    loggerType: 'applicationInsights'
+    resourceId: applicationInsights.id
+    credentials: {
+      instrumentationKey: applicationInsights.properties.InstrumentationKey
+    }
+    isBuffered: true
+  }
+}
+
+resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01-preview' = {
+  parent: apim
+  name: 'applicationinsights'
+  properties: {
+    alwaysLog: 'allErrors'
+    httpCorrelationProtocol: 'W3C'
+    verbosity: 'information'
+    logClientIp: true
+    loggerId: apimLogger.id
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 100
+    }
+    frontend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
+    backend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
   }
 }
 
@@ -695,91 +793,5 @@ resource bastionNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
         }
       }
     ]
-  }
-}
-
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: logAnalyticsWorkspaceName
-  location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
-}
-
-resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: applicationInsightsName
-  location: location
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logAnalyticsWorkspace.id
-  }
-}
-
-resource appInsightsInstrumentationKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
-  parent: kv
-  name: 'appInsightsInstrumentationKey'
-  properties: {
-    value: applicationInsights.properties.InstrumentationKey
-  }
-}
-
-resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
-  parent: apim
-  name: 'appInsightsLogger'
-  properties: {
-    loggerType: 'applicationInsights'
-    resourceId: applicationInsights.id
-    credentials: {
-      instrumentationKey: applicationInsights.properties.InstrumentationKey
-    }
-    isBuffered: true
-  }
-}
-
-resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01-preview' = {
-  parent: apim
-  name: 'applicationinsights'
-  properties: {
-    alwaysLog: 'allErrors'
-    httpCorrelationProtocol: 'W3C'
-    verbosity: 'information'
-    logClientIp: true
-    loggerId: apimLogger.id
-    sampling: {
-      samplingType: 'fixed'
-      percentage: 100
-    }
-    frontend: {
-      request: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-      response: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-    }
-    backend: {
-      request: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-      response: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-    }
   }
 }
