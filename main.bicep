@@ -11,16 +11,16 @@ param oaiCustomSubDomainName string = 'oai-${uniqueString(resourceGroup().id)}'
 param oaiSku string = 'S0'
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param embeddingsDeploymentCapacity int
+param embeddingsDeploymentCapacity int = 1
 
 @description('Name of the Embeddings Model to deploy')
-param embeddingsModelName string
+param embeddingsModelName string = 'text-embedding-ada-002'
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param gptDeploymentCapacity int
+param gptDeploymentCapacity int = 1
 
 @description('Name of the GPT Model to deploy')
-param chatGptModelName string
+param chatGptModelName string = 'gpt-35-turbo'
 
 @description('The pricing tier of the API Management service')
 @allowed([
@@ -69,9 +69,6 @@ param vmAdminPassword string
   'win11-22h2-pron'
   'win11-22h2-pro-zh-cn'
   'win11-22h2-ent'
-  '2019-datacenter-zhcn-g2'
-  '2022-datacenter-azure-edition'
-  '2022-datacenter-g2'
 ])
 param OSVersion string = 'win11-22h2-ent'
 
@@ -86,7 +83,7 @@ param vmName string = 'vm-oai-demo'
   'Standard'
   'TrustedLaunch'
 ])
-param securityType string = 'TrustedLaunch'
+param securityType string = 'Standard'
 
 param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
 param kvPrivateEndpointName string = 'kvPrivateEndpoint'
@@ -98,6 +95,12 @@ param tenantId string = subscription().tenantId
 
 @description('Specifies the SKU for the key vault.')
 param kvSkuName string = 'standard'
+
+@description('Specifies the name for the Log Analytics account')
+param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}'
+
+@description('Specifies the name for the Log Analytics account')
+param applicationInsightsName string = 'appi-oai-demo'
 
 var securityProfileJson = {
   uefiSettings: {
@@ -175,8 +178,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: basicNSG.id
           }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -187,8 +188,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: apimNSG.id
           }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -341,6 +340,7 @@ resource oaiAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-previ
   }
 }
 
+// Key Vault Resources
 resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
   name: kvPrivateEndpointName
   location: location
@@ -404,7 +404,8 @@ resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZon
   }
 }
 
-resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
+// API Management Resources
+resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
   name: apimName
   location: location
   sku: {
@@ -439,23 +440,11 @@ resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
           direction: 'Inbound'
         }
       }
-      {
-        name: 'AllowInfrastructureLoadBalancerInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'AzureLoadBalancer'
-          destinationPortRange: '6390'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 110
-          direction: 'Inbound'
-        }
-      }
     ]
   }
 }
 
+// Virtual Machine Resources
 resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
   name: '${vmName}-nic'
   location: location
@@ -538,6 +527,7 @@ resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' =
   }
 }
 
+//Bastion Host Resources
 resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
   name: 'pip-${bastionHostName}'
   location: location
@@ -704,19 +694,92 @@ resource bastionNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
           direction: 'Outbound'
         }
       }
-      {
-        name: 'DenyAllOutBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Deny'
-          priority: 1000
-          direction: 'Outbound'
+    ]
+  }
+}
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: applicationInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
+
+resource appInsightsInstrumentationKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'appInsightsInstrumentationKey'
+  properties: {
+    value: applicationInsights.properties.InstrumentationKey
+  }
+}
+
+resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
+  parent: apim
+  name: 'appInsightsLogger'
+  properties: {
+    loggerType: 'applicationInsights'
+    resourceId: applicationInsights.id
+    credentials: {
+      instrumentationKey: applicationInsights.properties.InstrumentationKey
+    }
+    isBuffered: true
+  }
+}
+
+resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01-preview' = {
+  parent: apim
+  name: 'applicationinsights'
+  properties: {
+    alwaysLog: 'allErrors'
+    httpCorrelationProtocol: 'W3C'
+    verbosity: 'information'
+    logClientIp: true
+    loggerId: apimLogger.id
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 100
+    }
+    frontend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
         }
       }
-    ]
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
+    backend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
   }
 }
