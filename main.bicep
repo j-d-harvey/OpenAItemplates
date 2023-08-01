@@ -11,16 +11,16 @@ param oaiCustomSubDomainName string = 'oai-${uniqueString(resourceGroup().id)}'
 param oaiSku string = 'S0'
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param embeddingsDeploymentCapacity int
+param embeddingsDeploymentCapacity int = 1
 
 @description('Name of the Embeddings Model to deploy')
-param embeddingsModelName string
+param embeddingsModelName string = 'text-embedding-ada-002'
 
 @description('Tokens per Minute Rate Limit (thousands)')
-param gptDeploymentCapacity int
+param gptDeploymentCapacity int = 1
 
 @description('Name of the GPT Model to deploy')
-param chatGptModelName string
+param chatGptModelName string = 'gpt-35-turbo'
 
 @description('The pricing tier of the API Management service')
 @allowed([
@@ -42,6 +42,9 @@ param apimPublisherEmail string
 @description('The name of the owner of the API Management service')
 @minLength(1)
 param apimPublisherName string
+
+@description('Name of the API Management Private DNS Zone')
+param apimPrivateDnsZoneName string = 'azure-api.net'
 
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
@@ -69,9 +72,6 @@ param vmAdminPassword string
   'win11-22h2-pron'
   'win11-22h2-pro-zh-cn'
   'win11-22h2-ent'
-  '2019-datacenter-zhcn-g2'
-  '2022-datacenter-azure-edition'
-  '2022-datacenter-g2'
 ])
 param OSVersion string = 'win11-22h2-ent'
 
@@ -86,10 +86,14 @@ param vmName string = 'vm-oai-demo'
   'Standard'
   'TrustedLaunch'
 ])
-param securityType string = 'TrustedLaunch'
+param securityType string = 'Standard'
 
+@description('Name of the Key Vault Private DNS Zone')
 param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
+
+@description('Name of the Key Vault Private Endpoint')
 param kvPrivateEndpointName string = 'kvPrivateEndpoint'
+
 @description('Specifies the name of the key vault.')
 param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
 
@@ -98,6 +102,12 @@ param tenantId string = subscription().tenantId
 
 @description('Specifies the SKU for the key vault.')
 param kvSkuName string = 'standard'
+
+@description('Specifies the name for the Log Analytics account')
+param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}'
+
+@description('Specifies the name for the Log Analytics account')
+param applicationInsightsName string = 'appi-oai-demo'
 
 var securityProfileJson = {
   uefiSettings: {
@@ -175,8 +185,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: basicNSG.id
           }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -187,8 +195,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
           networkSecurityGroup: {
             id: apimNSG.id
           }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Disabled'
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
@@ -221,6 +227,29 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
   }
 }
 
+// Log Analytics Workspace and Application Insights resources
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: applicationInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
+
+// OpenAI Account resources
 resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   name: openAiAccountName
   location: location
@@ -314,6 +343,25 @@ resource oaiPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZo
   }
 }
 
+resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: oaiAccount
+  name: '${openAiAccountName}-diags'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+        retentionPolicy: {
+          enabled: true
+          days: 90
+        }
+      }
+    ]
+  }
+}
+
+// Key Vault Resources
 resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   name: keyVaultName
   location: location
@@ -404,12 +452,16 @@ resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZon
   }
 }
 
-resource apim 'Microsoft.ApiManagement/service@2020-06-01-preview' = {
+// API Management Resources
+resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
   name: apimName
   location: location
   sku: {
     name: apimSku
     capacity: apimCapacity
+  }
+  identity: {
+    type: 'SystemAssigned'
   }
   properties: {
     publisherEmail: apimPublisherEmail
@@ -439,23 +491,103 @@ resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
           direction: 'Inbound'
         }
       }
-      {
-        name: 'AllowInfrastructureLoadBalancerInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'AzureLoadBalancer'
-          destinationPortRange: '6390'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 110
-          direction: 'Inbound'
+    ]
+  }
+}
+
+resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
+  parent: apim
+  name: 'appInsightsLogger'
+  properties: {
+    loggerType: 'applicationInsights'
+    resourceId: applicationInsights.id
+    credentials: {
+      instrumentationKey: applicationInsights.properties.InstrumentationKey
+    }
+    isBuffered: true
+  }
+}
+
+resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01-preview' = {
+  parent: apim
+  name: 'applicationinsights'
+  properties: {
+    alwaysLog: 'allErrors'
+    httpCorrelationProtocol: 'W3C'
+    verbosity: 'information'
+    logClientIp: true
+    loggerId: apimLogger.id
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 100
+    }
+    frontend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
         }
+      }
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
+    backend: {
+      request: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+      response: {
+        headers: []
+        body: {
+          bytes: 8192
+        }
+      }
+    }
+  }
+}
+
+resource apimPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: apimPrivateDnsZoneName
+  location: 'global'
+  properties: {}
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: apimPrivateDnsZone
+  name: '${apimPrivateDnsZoneName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource azure_api_net_apim_name 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: apimName
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
       }
     ]
   }
 }
 
+// Virtual Machine Resources
 resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
   name: '${vmName}-nic'
   location: location
@@ -538,6 +670,7 @@ resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' =
   }
 }
 
+//Bastion Host Resources
 resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
   name: 'pip-${bastionHostName}'
   location: location
@@ -701,19 +834,6 @@ resource bastionNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
           ]
           access: 'Allow'
           priority: 130
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'DenyAllOutBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Deny'
-          priority: 1000
           direction: 'Outbound'
         }
       }
