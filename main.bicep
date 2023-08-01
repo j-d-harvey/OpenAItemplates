@@ -43,6 +43,9 @@ param apimPublisherEmail string
 @minLength(1)
 param apimPublisherName string
 
+@description('Name of the API Management Private DNS Zone')
+param apimPrivateDnsZoneName string = 'azure-api.net'
+
 @description('Name of the Azure Virtual Network')
 param virtualNetworkName string = 'vnet-oai-demo'
 
@@ -85,8 +88,12 @@ param vmName string = 'vm-oai-demo'
 ])
 param securityType string = 'Standard'
 
+@description('Name of the Key Vault Private DNS Zone')
 param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
+
+@description('Name of the Key Vault Private Endpoint')
 param kvPrivateEndpointName string = 'kvPrivateEndpoint'
+
 @description('Specifies the name of the key vault.')
 param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
 
@@ -453,6 +460,9 @@ resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
     name: apimSku
     capacity: apimCapacity
   }
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     publisherEmail: apimPublisherEmail
     publisherName: apimPublisherName
@@ -539,6 +549,41 @@ resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01
         }
       }
     }
+  }
+}
+
+resource apimPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: apimPrivateDnsZoneName
+  location: 'global'
+  properties: {}
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
+resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: apimPrivateDnsZone
+  name: '${apimPrivateDnsZoneName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource azure_api_net_apim_name 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: apimName
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+    ]
   }
 }
 
