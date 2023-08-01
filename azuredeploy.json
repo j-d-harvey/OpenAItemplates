@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.19.5.34762",
+      "templateHash": "8760225011775479202"
+    }
+  },
   "parameters": {
     "location": {
       "type": "string",
@@ -32,24 +39,28 @@
     },
     "embeddingsDeploymentCapacity": {
       "type": "int",
+      "defaultValue": 1,
       "metadata": {
         "description": "Tokens per Minute Rate Limit (thousands)"
       }
     },
     "embeddingsModelName": {
       "type": "string",
+      "defaultValue": "text-embedding-ada-002",
       "metadata": {
         "description": "Name of the Embeddings Model to deploy"
       }
     },
     "gptDeploymentCapacity": {
       "type": "int",
+      "defaultValue": 1,
       "metadata": {
         "description": "Tokens per Minute Rate Limit (thousands)"
       }
     },
     "chatGptModelName": {
       "type": "string",
+      "defaultValue": "gpt-35-turbo",
       "metadata": {
         "description": "Name of the GPT Model to deploy"
       }
@@ -91,6 +102,13 @@
       "minLength": 1,
       "metadata": {
         "description": "The name of the owner of the API Management service"
+      }
+    },
+    "apimPrivateDnsZoneName": {
+      "type": "string",
+      "defaultValue": "azure-api.net",
+      "metadata": {
+        "description": "Name of the API Management Private DNS Zone"
       }
     },
     "virtualNetworkName": {
@@ -141,13 +159,10 @@
         "win11-22h2-pro",
         "win11-22h2-pron",
         "win11-22h2-pro-zh-cn",
-        "win11-22h2-ent",
-        "2019-datacenter-zhcn-g2",
-        "2022-datacenter-azure-edition",
-        "2022-datacenter-g2"
+        "win11-22h2-ent"
       ],
       "metadata": {
-        "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+        "description": "The Windows version for the VM"
       }
     },
     "vmSize": {
@@ -166,7 +181,7 @@
     },
     "securityType": {
       "type": "string",
-      "defaultValue": "TrustedLaunch",
+      "defaultValue": "Standard",
       "allowedValues": [
         "Standard",
         "TrustedLaunch"
@@ -177,31 +192,51 @@
     },
     "kvPrivateDnsZoneName": {
       "type": "string",
-      "defaultValue": "privatelink.vaultcore.azure.net"
+      "defaultValue": "privatelink.vaultcore.azure.net",
+      "metadata": {
+        "description": "Name of the Key Vault Private DNS Zone"
+      }
     },
     "kvPrivateEndpointName": {
       "type": "string",
-      "defaultValue": "kvPrivateEndpoint"
+      "defaultValue": "kvPrivateEndpoint",
+      "metadata": {
+        "description": "Name of the Key Vault Private Endpoint"
+      }
     },
     "keyVaultName": {
       "type": "string",
       "defaultValue": "[format('kv{0}', uniqueString(resourceGroup().id))]",
       "metadata": {
-        "description": "Specifies the name of the key vault."
+        "description": "Name of the key vault."
       }
     },
     "tenantId": {
       "type": "string",
       "defaultValue": "[subscription().tenantId]",
       "metadata": {
-        "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
+        "description": "Azure Active Directory tenant ID that should be used for authenticating requests to the key vault"
       }
     },
     "kvSkuName": {
       "type": "string",
       "defaultValue": "standard",
       "metadata": {
-        "description": "Specifies the SKU for the key vault."
+        "description": "SKU of the key vault."
+      }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[format('la-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the Log Analytics account"
+      }
+    },
+    "applicationInsightsName": {
+      "type": "string",
+      "defaultValue": "appi-oai-demo",
+      "metadata": {
+        "description": "Name of the Log Analytics account"
       }
     }
   },
@@ -285,9 +320,7 @@
               "addressPrefix": "10.0.0.32/28",
               "networkSecurityGroup": {
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
-              },
-              "privateEndpointNetworkPolicies": "Disabled",
-              "privateLinkServiceNetworkPolicies": "Disabled"
+              }
             },
             "type": "Microsoft.Network/virtualNetworks/subnets"
           },
@@ -297,9 +330,7 @@
               "addressPrefix": "10.0.0.64/27",
               "networkSecurityGroup": {
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-apim-oai-demo')]"
-              },
-              "privateEndpointNetworkPolicies": "Disabled",
-              "privateLinkServiceNetworkPolicies": "Disabled"
+              }
             },
             "type": "Microsoft.Network/virtualNetworks/subnets"
           },
@@ -334,6 +365,32 @@
         "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-apim-oai-demo')]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}', parameters('bastionHostName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[parameters('logAnalyticsWorkspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[parameters('applicationInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
       ]
     },
     {
@@ -450,6 +507,29 @@
       ]
     },
     {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[format('Microsoft.CognitiveServices/accounts/{0}', parameters('openAiAccountName'))]",
+      "name": "[format('{0}-diags', parameters('openAiAccountName'))]",
+      "properties": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+        "logs": [
+          {
+            "categoryGroup": "allLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": true,
+              "days": 90
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiAccountName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2021-11-01-preview",
       "name": "[parameters('keyVaultName')]",
@@ -560,12 +640,15 @@
     },
     {
       "type": "Microsoft.ApiManagement/service",
-      "apiVersion": "2020-06-01-preview",
+      "apiVersion": "2023-03-01-preview",
       "name": "[parameters('apimName')]",
       "location": "[parameters('location')]",
       "sku": {
         "name": "[parameters('apimSku')]",
         "capacity": "[parameters('apimCapacity')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
       },
       "properties": {
         "publisherEmail": "[parameters('apimPublisherEmail')]",
@@ -598,22 +681,119 @@
               "priority": 100,
               "direction": "Inbound"
             }
-          },
-          {
-            "name": "AllowInfrastructureLoadBalancerInBound",
-            "properties": {
-              "protocol": "Tcp",
-              "sourcePortRange": "*",
-              "sourceAddressPrefix": "AzureLoadBalancer",
-              "destinationPortRange": "6390",
-              "destinationAddressPrefix": "VirtualNetwork",
-              "access": "Allow",
-              "priority": 110,
-              "direction": "Inbound"
-            }
           }
         ]
       }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/loggers",
+      "apiVersion": "2023-03-01-preview",
+      "name": "[format('{0}/{1}', parameters('apimName'), 'appInsightsLogger')]",
+      "properties": {
+        "loggerType": "applicationInsights",
+        "resourceId": "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+        "credentials": {
+          "instrumentationKey": "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+        },
+        "isBuffered": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/diagnostics",
+      "apiVersion": "2023-03-01-preview",
+      "name": "[format('{0}/{1}', parameters('apimName'), 'applicationinsights')]",
+      "properties": {
+        "alwaysLog": "allErrors",
+        "httpCorrelationProtocol": "W3C",
+        "verbosity": "information",
+        "logClientIp": true,
+        "loggerId": "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimName'), 'appInsightsLogger')]",
+        "sampling": {
+          "samplingType": "fixed",
+          "percentage": 100
+        },
+        "frontend": {
+          "request": {
+            "headers": [],
+            "body": {
+              "bytes": 8192
+            }
+          },
+          "response": {
+            "headers": [],
+            "body": {
+              "bytes": 8192
+            }
+          }
+        },
+        "backend": {
+          "request": {
+            "headers": [],
+            "body": {
+              "bytes": 8192
+            }
+          },
+          "response": {
+            "headers": [],
+            "body": {
+              "bytes": 8192
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimName'), 'appInsightsLogger')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[parameters('apimPrivateDnsZoneName')]",
+      "location": "global",
+      "properties": {},
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), format('{0}-link', parameters('apimPrivateDnsZoneName')))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "condition": true,
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), parameters('apimName'))]",
+      "location": "global",
+      "properties": {
+        "ttl": 36000,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]"
+      ]
     },
     {
       "type": "Microsoft.Network/networkInterfaces",
@@ -880,19 +1060,6 @@
               ],
               "access": "Allow",
               "priority": 130,
-              "direction": "Outbound"
-            }
-          },
-          {
-            "name": "DenyAllOutBound",
-            "properties": {
-              "protocol": "*",
-              "sourcePortRange": "*",
-              "destinationPortRange": "*",
-              "sourceAddressPrefix": "*",
-              "destinationAddressPrefix": "*",
-              "access": "Deny",
-              "priority": 1000,
               "direction": "Outbound"
             }
           }
