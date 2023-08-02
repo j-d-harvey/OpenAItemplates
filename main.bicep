@@ -584,7 +584,63 @@ resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetwor
   }
 }
 
-resource apimDnsRecords 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+resource apimPortalDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: '${apimName}.portal'
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+    ]
+  }
+}
+
+resource apimDeveloperDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: '${apimName}.developer'
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+    ]
+  }
+}
+
+resource apimManagementDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: '${apimName}.management'
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+    ]
+  }
+}
+
+resource apimScmDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+  parent: apimPrivateDnsZone
+  name: '${apimName}.scm'
+  location: 'global'
+  properties: {
+    ttl: 36000
+    aRecords: [
+      {
+        ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+    ]
+  }
+}
+
+resource apimDnsRecord2 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
   parent: apimPrivateDnsZone
   name: apimName
   location: 'global'
@@ -593,18 +649,6 @@ resource apimDnsRecords 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (t
     aRecords: [
       {
         ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-      {
-        ipv4Address: '${apim.properties.privateIPAddresses[0]}.portal'
-      }
-      {
-        ipv4Address: '${apim.properties.privateIPAddresses[0]}.developer'
-      }
-      {
-        ipv4Address: '${apim.properties.privateIPAddresses[0]}.management'
-      }
-      {
-        ipv4Address: '${apim.properties.privateIPAddresses[0]}.scm'
       }
     ]
   }
