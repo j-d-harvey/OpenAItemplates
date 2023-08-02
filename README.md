@@ -1,5 +1,5 @@
 ---
-description: This template deploys an Azure OpenAI resource with embeddings and GPT model deployments. It ensures private network access through a private endpoint and private DNS zone linked to a VNET, while also deploying a virtual machine and a Bastion host for for internal endpoint connectivity testing.
+description: This template deploys a sample environment that aligns with the guidance in the Aure OpenAI Landing Zone reference architecture. 
 page_type: sample
 products:
 - azure
@@ -9,11 +9,15 @@ languages:
 - json
 - bicep
 ---
-# Create an Azure OpenAI resource with a private endpoint
+# Deploy a sample environment that aligns with the guidance in the Aure OpenAI Landing Zone reference architecture
+
+## Prerequisites
+- [Azure Subscription](https://azure.microsoft.com/en-us/get-started/)
+- [Azure OpenAI Application](https://aka.ms/oai/access)
 
 [![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fj-d-harvey%2FOpenAItemplates%2Fmain%2Fazuredeploy.json)
 
-This template deploys an Azure OpenAI resource with embeddings and GPT model deployments. It ensures private network access through a private endpoint and private DNS zone linked to a VNET. A Key Vault with private endpoint and private DNS zone are deployed, and a secret is created containing the OpenAI Access Key. An API Management service is deployed with Internal VNET integration, and a virtual machine and a Bastion host are deployed for for internal endpoint connectivity testing.
+This template deploys a sample environment that aligns with the guidance in the Aure OpenAI Landing Zone reference architecture. An OpenAI resource with embeddings and GPT model deployments is deployed, and private network access is ensured through a private endpoint. Diagnostic logging is enabled and configured to send data to a Log Analytics workspace. A Key Vault with private endpoint and a secret is created containing the OpenAI Access Key. An API Management service to publish the OpenAI APIs is deployed with Internal VNET integration, and an Application Insights logger is configured to capture telemetry. A virtual machine and a Bastion host are deployed for for internal endpoint connectivity testing. Private DNS Zones are linked to the VNET to facilitate name resolution. 
 
 ## Reference Architecture
 ![img](/azure-openai-architecture.png)

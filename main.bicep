@@ -121,6 +121,7 @@ var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
 var extensionVersion = '1.0'
 var maaTenantName = 'GuestAttestation'
 var maaEndpoint = substring('emptyString', 0, 0)
+var apimRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
 var embeddingsDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
 var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
@@ -381,6 +382,16 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   }
 }
 
+resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(apimRoleDefinitionId,apim.id,kv.id)
+  scope: kv
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: apim.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource oaiAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
   parent: kv
   name: 'oaiAccountKey'
@@ -573,7 +584,7 @@ resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetwor
   }
 }
 
-resource azure_api_net_apim_name 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
+resource apimDnsRecords 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
   parent: apimPrivateDnsZone
   name: apimName
   location: 'global'
@@ -582,6 +593,18 @@ resource azure_api_net_apim_name 'Microsoft.Network/privateDnsZones/A@2020-06-01
     aRecords: [
       {
         ipv4Address: apim.properties.privateIPAddresses[0]
+      }
+      {
+        ipv4Address: '${apim.properties.privateIPAddresses[0]}.portal'
+      }
+      {
+        ipv4Address: '${apim.properties.privateIPAddresses[0]}.developer'
+      }
+      {
+        ipv4Address: '${apim.properties.privateIPAddresses[0]}.management'
+      }
+      {
+        ipv4Address: '${apim.properties.privateIPAddresses[0]}.scm'
       }
     ]
   }
