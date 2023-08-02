@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.19.5.34762",
-      "templateHash": "8760225011775479202"
+      "templateHash": "11144282632868588311"
     }
   },
   "parameters": {
@@ -206,9 +206,9 @@
     },
     "keyVaultName": {
       "type": "string",
-      "defaultValue": "[format('kv{0}', uniqueString(resourceGroup().id))]",
+      "defaultValue": "[format('kv-{0}', uniqueString(resourceGroup().id))]",
       "metadata": {
-        "description": "Name of the key vault."
+        "description": "Specifies the name of the key vault."
       }
     },
     "tenantId": {
@@ -253,6 +253,7 @@
     "extensionVersion": "1.0",
     "maaTenantName": "GuestAttestation",
     "maaEndpoint": "[substring('emptyString', 0, 0)]",
+    "apimRoleDefinitionId": "4633458b-17de-408a-b874-0445c86b69e6",
     "embeddingsDeployment": "[if(empty(parameters('embeddingsModelName')), 'ada', parameters('embeddingsModelName'))]",
     "chatGptDeployment": "[if(empty(parameters('chatGptModelName')), 'chat', parameters('chatGptModelName'))]",
     "deployments": [
@@ -536,9 +537,9 @@
       "location": "[parameters('location')]",
       "properties": {
         "tenantId": "[parameters('tenantId')]",
+        "enableRbacAuthorization": true,
         "enableSoftDelete": true,
         "softDeleteRetentionInDays": 90,
-        "accessPolicies": [],
         "sku": {
           "name": "[parameters('kvSkuName')]",
           "family": "A"
@@ -548,6 +549,21 @@
           "bypass": "AzureServices"
         }
       }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2020-04-01-preview",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
+      "name": "[guid(variables('apimRoleDefinitionId'), resourceId('Microsoft.ApiManagement/service', parameters('apimName')), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      ]
     },
     {
       "type": "Microsoft.KeyVault/vaults/secrets",
@@ -787,6 +803,18 @@
         "aRecords": [
           {
             "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          },
+          {
+            "ipv4Address": "[format('{0}.portal', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
+          },
+          {
+            "ipv4Address": "[format('{0}.developer', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
+          },
+          {
+            "ipv4Address": "[format('{0}.management', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
+          },
+          {
+            "ipv4Address": "[format('{0}.scm', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
           }
         ]
       },
