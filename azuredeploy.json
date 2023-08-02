@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.19.5.34762",
-      "templateHash": "11144282632868588311"
+      "templateHash": "11918774233905433650"
     }
   },
   "parameters": {
@@ -796,6 +796,82 @@
       "condition": true,
       "type": "Microsoft.Network/privateDnsZones/A",
       "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), format('{0}.portal', parameters('apimName')))]",
+      "location": "global",
+      "properties": {
+        "ttl": 36000,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]"
+      ]
+    },
+    {
+      "condition": true,
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), format('{0}.developer', parameters('apimName')))]",
+      "location": "global",
+      "properties": {
+        "ttl": 36000,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]"
+      ]
+    },
+    {
+      "condition": true,
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), format('{0}.management', parameters('apimName')))]",
+      "location": "global",
+      "properties": {
+        "ttl": 36000,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]"
+      ]
+    },
+    {
+      "condition": true,
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), format('{0}.scm', parameters('apimName')))]",
+      "location": "global",
+      "properties": {
+        "ttl": 36000,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('apimPrivateDnsZoneName'))]"
+      ]
+    },
+    {
+      "condition": true,
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2020-06-01",
       "name": "[format('{0}/{1}', parameters('apimPrivateDnsZoneName'), parameters('apimName'))]",
       "location": "global",
       "properties": {
@@ -803,18 +879,6 @@
         "aRecords": [
           {
             "ipv4Address": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0]]"
-          },
-          {
-            "ipv4Address": "[format('{0}.portal', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
-          },
-          {
-            "ipv4Address": "[format('{0}.developer', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
-          },
-          {
-            "ipv4Address": "[format('{0}.management', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
-          },
-          {
-            "ipv4Address": "[format('{0}.scm', reference(resourceId('Microsoft.ApiManagement/service', parameters('apimName')), '2023-03-01-preview').privateIPAddresses[0])]"
           }
         ]
       },
