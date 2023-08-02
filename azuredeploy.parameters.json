@@ -2,20 +2,17 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "embeddingsDeploymentCapacity": {
-      "value": 10
+    "apimPublisherEmail": {
+      "value": ""
     },
-    "embeddingsModelName": {
-      "value": "text-embedding-ada-002"
-    },
-    "gptDeploymentCapacity": {
-      "value": 10
-    },
-    "chatGptModelName": {
-      "value": "gpt-35-turbo"
+    "apimPublisherName": {
+      "value": ""
     },
     "vmAdminUsername": {
-      "value": "oaiadmin"
+      "value": ""
+    },
+    "vmAdminPassword": {
+      "value": ""
     }
   }
 }
