@@ -66,7 +66,7 @@ param vmAdminUsername string
 @secure()
 param vmAdminPassword string
 
-@description('The Windows version for the VM. This will pick a fully patched image of this given Windows version.')
+@description('The Windows version for the VM')
 @allowed([
   'win11-22h2-pro'
   'win11-22h2-pron'
@@ -97,16 +97,16 @@ param kvPrivateEndpointName string = 'kvPrivateEndpoint'
 @description('Specifies the name of the key vault.')
 param keyVaultName string = 'kv-${uniqueString(resourceGroup().id)}'
 
-@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
+@description('Azure Active Directory tenant ID that should be used for authenticating requests to the key vault')
 param tenantId string = subscription().tenantId
 
-@description('Specifies the SKU for the key vault.')
+@description('SKU of the key vault.')
 param kvSkuName string = 'standard'
 
-@description('Specifies the name for the Log Analytics account')
+@description('Name of the Log Analytics account')
 param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}'
 
-@description('Specifies the name for the Log Analytics account')
+@description('Name of the Log Analytics account')
 param applicationInsightsName string = 'appi-oai-demo'
 
 var securityProfileJson = {
