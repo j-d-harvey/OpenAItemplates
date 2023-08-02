@@ -95,7 +95,7 @@ param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
 param kvPrivateEndpointName string = 'kvPrivateEndpoint'
 
 @description('Specifies the name of the key vault.')
-param keyVaultName string = 'kv${uniqueString(resourceGroup().id)}'
+param keyVaultName string = 'kv-${uniqueString(resourceGroup().id)}'
 
 @description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
 param tenantId string = subscription().tenantId
