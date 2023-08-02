@@ -368,9 +368,9 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   location: location
   properties: {
     tenantId: tenantId
+    enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
-    accessPolicies: []
     sku: {
       name: kvSkuName
       family: 'A'
@@ -383,7 +383,7 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
 }
 
 resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
-  name: guid(apimRoleDefinitionId,apim.id,kv.id)
+  name: guid(apimRoleDefinitionId, apim.id, kv.id)
   scope: kv
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
