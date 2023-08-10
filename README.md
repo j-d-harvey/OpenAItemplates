@@ -9,7 +9,7 @@ languages:
 - json
 - bicep
 ---
-# Deploy a sample environment that aligns with the guidance in the Aure OpenAI Landing Zone reference architecture
+# Deploy a sample environment that aligns with guidance in Aure OpenAI reference architectures
 
 ## Prerequisites
 - [Azure Subscription](https://azure.microsoft.com/en-us/get-started/)
@@ -19,7 +19,9 @@ languages:
 
 [![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fj-d-harvey%2FOpenAItemplates%2Fmain%2Fazuredeploy.json)
 
-This template deploys a sample environment that demonstrates much of the guidance in the [Implement logging and monitoring for Azure OpenAI models reference architecture](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/ai/log-monitor-azure-openai) and the [Aure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/t5/azure-architecture-blog/azure-openai-landing-zone-reference-architecture/ba-p/3882102).
+This template deploys a sample environment that demonstrates much of the guidance in the [Implement logging and monitoring for Azure OpenAI models reference architecture](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/ai/log-monitor-azure-openai)
+
+and the [Aure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/t5/azure-architecture-blog/azure-openai-landing-zone-reference-architecture/ba-p/3882102).
 
 ## What will be deployed?
 
