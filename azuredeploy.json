@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.19.5.34762",
-      "templateHash": "4743961386174586445"
+      "version": "0.20.4.51522",
+      "templateHash": "6598093403949168763"
     }
   },
   "parameters": {
@@ -108,10 +108,7 @@
         "win11-22h2-pro",
         "win11-22h2-pron",
         "win11-22h2-pro-zh-cn",
-        "win11-22h2-ent",
-        "2019-datacenter-zhcn-g2",
-        "2022-datacenter-azure-edition",
-        "2022-datacenter-g2"
+        "win11-22h2-ent"
       ],
       "metadata": {
         "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
@@ -130,32 +127,9 @@
       "metadata": {
         "description": "Name of the virtual machine."
       }
-    },
-    "securityType": {
-      "type": "string",
-      "defaultValue": "TrustedLaunch",
-      "allowedValues": [
-        "Standard",
-        "TrustedLaunch"
-      ],
-      "metadata": {
-        "description": "Security Type of the Virtual Machine."
-      }
     }
   },
   "variables": {
-    "securityProfileJson": {
-      "uefiSettings": {
-        "secureBootEnabled": true,
-        "vTpmEnabled": true
-      },
-      "securityType": "[parameters('securityType')]"
-    },
-    "extensionName": "GuestAttestation",
-    "extensionPublisher": "Microsoft.Azure.Security.WindowsAttestation",
-    "extensionVersion": "1.0",
-    "maaTenantName": "GuestAttestation",
-    "maaEndpoint": "[substring('emptyString', 0, 0)]",
     "embeddingsDeployment": "[if(empty(parameters('embeddingsModelName')), 'ada', parameters('embeddingsModelName'))]",
     "chatGptDeployment": "[if(empty(parameters('chatGptModelName')), 'chat', parameters('chatGptModelName'))]",
     "deployments": [
@@ -187,7 +161,16 @@
     {
       "type": "Microsoft.Network/networkSecurityGroups",
       "apiVersion": "2022-07-01",
-      "name": "nsg-basic-oai-demo",
+      "name": "nsg-pe-oai-demo",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": []
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2022-07-01",
+      "name": "nsg-vm-oai-demo",
       "location": "[parameters('location')]",
       "properties": {
         "securityRules": []
@@ -210,7 +193,7 @@
             "properties": {
               "addressPrefix": "10.0.0.0/27",
               "networkSecurityGroup": {
-                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-pe-oai-demo')]"
               },
               "privateEndpointNetworkPolicies": "Enabled",
               "privateLinkServiceNetworkPolicies": "Enabled"
@@ -222,7 +205,7 @@
             "properties": {
               "addressPrefix": "10.0.0.32/28",
               "networkSecurityGroup": {
-                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]"
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-vm-oai-demo')]"
               },
               "privateEndpointNetworkPolicies": "Enabled",
               "privateLinkServiceNetworkPolicies": "Enabled"
@@ -245,8 +228,9 @@
         "virtualNetworkPeerings": []
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-basic-oai-demo')]",
-        "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}', parameters('bastionHostName')))]"
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}', parameters('bastionHostName')))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-pe-oai-demo')]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-vm-oai-demo')]"
       ]
     },
     {
@@ -425,29 +409,34 @@
             "enabled": false
           }
         },
-        "securityProfile": "[if(equals(parameters('securityType'), 'TrustedLaunch'), variables('securityProfileJson'), null())]"
+        "securityProfile": {
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('vmName')))]"
       ]
     },
     {
-      "condition": "[and(equals(parameters('securityType'), 'TrustedLaunch'), and(equals(variables('securityProfileJson').uefiSettings.secureBootEnabled, true()), equals(variables('securityProfileJson').uefiSettings.vTpmEnabled, true())))]",
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2022-03-01",
-      "name": "[format('{0}/{1}', parameters('vmName'), variables('extensionName'))]",
+      "name": "[format('{0}/{1}', parameters('vmName'), 'GuestAttestation')]",
       "location": "[parameters('location')]",
       "properties": {
-        "publisher": "[variables('extensionPublisher')]",
-        "type": "[variables('extensionName')]",
-        "typeHandlerVersion": "[variables('extensionVersion')]",
+        "publisher": "Microsoft.Azure.Security.WindowsAttestation",
+        "type": "GuestAttestation",
+        "typeHandlerVersion": "1.0",
         "autoUpgradeMinorVersion": true,
         "enableAutomaticUpgrade": true,
         "settings": {
           "AttestationConfig": {
             "MaaSettings": {
-              "maaEndpoint": "[variables('maaEndpoint')]",
-              "maaTenantName": "[variables('maaTenantName')]"
+              "maaEndpoint": "[substring('emptyString', 0, 0)]",
+              "maaTenantName": "GuestAttestation"
             }
           }
         }

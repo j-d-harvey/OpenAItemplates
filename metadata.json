@@ -5,6 +5,6 @@
     "summary": "Azure OpenAI with embeddings and GPT models, private network access, a VM for endpoint testing, and a Bastion host for remote access",
     "githubUsername": "j-d-harvey",
     "docOwner": "j-d-harvey",
-    "dateUpdated": "2023-07-15",
+    "dateUpdated": "2023-08-11",
     "type": "QuickStart"
 }

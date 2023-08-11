@@ -48,9 +48,6 @@ param adminPassword string
   'win11-22h2-pron'
   'win11-22h2-pro-zh-cn'
   'win11-22h2-ent'
-  '2019-datacenter-zhcn-g2'
-  '2022-datacenter-azure-edition'
-  '2022-datacenter-g2'
 ])
 param OSVersion string = 'win11-22h2-ent'
 
@@ -60,25 +57,6 @@ param vmSize string = 'Standard_D2s_v5'
 @description('Name of the virtual machine.')
 param vmName string = 'vm-oai-demo'
 
-@description('Security Type of the Virtual Machine.')
-@allowed([
-  'Standard'
-  'TrustedLaunch'
-])
-param securityType string = 'TrustedLaunch'
-
-var securityProfileJson = {
-  uefiSettings: {
-    secureBootEnabled: true
-    vTpmEnabled: true
-  }
-  securityType: securityType
-}
-var extensionName = 'GuestAttestation'
-var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
-var extensionVersion = '1.0'
-var maaTenantName = 'GuestAttestation'
-var maaEndpoint = substring('emptyString', 0, 0)
 var embeddingsDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
 var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
@@ -106,8 +84,16 @@ var deployments = [
   }
 ]
 
-resource basicNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
-  name: 'nsg-basic-oai-demo'
+resource peNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
+  name: 'nsg-pe-oai-demo'
+  location: location
+  properties: {
+    securityRules: []
+  }
+}
+
+resource vmNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
+  name: 'nsg-vm-oai-demo'
   location: location
   properties: {
     securityRules: []
@@ -129,7 +115,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         properties: {
           addressPrefix: '10.0.0.0/27'
           networkSecurityGroup: {
-            id: basicNSG.id
+            id: peNSG.id
           }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -141,7 +127,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
         properties: {
           addressPrefix: '10.0.0.32/28'
           networkSecurityGroup: {
-            id: basicNSG.id
+            id: vmNSG.id
           }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
@@ -315,25 +301,31 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
         enabled: false
       }
     }
-    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : null)
+    securityProfile: {
+      securityType: 'TrustedLaunch'
+      uefiSettings: {
+        secureBootEnabled: true
+        vTpmEnabled: true
+      }
+    }
   }
 }
 
-resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = if ((securityType == 'TrustedLaunch') && ((securityProfileJson.uefiSettings.secureBootEnabled == true) && (securityProfileJson.uefiSettings.vTpmEnabled == true))) {
+resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
   parent: vm
-  name: extensionName
+  name: 'GuestAttestation'
   location: location
   properties: {
-    publisher: extensionPublisher
-    type: extensionName
-    typeHandlerVersion: extensionVersion
+    publisher: 'Microsoft.Azure.Security.WindowsAttestation'
+    type: 'GuestAttestation'
+    typeHandlerVersion: '1.0'
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: true
     settings: {
       AttestationConfig: {
         MaaSettings: {
-          maaEndpoint: maaEndpoint
-          maaTenantName: maaTenantName
+          maaEndpoint: substring('emptyString', 0, 0)
+          maaTenantName: 'GuestAttestation'
         }
       }
     }
