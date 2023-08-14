@@ -229,24 +229,12 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
 }
 
 // Log Analytics Workspace and Application Insights resources
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: logAnalyticsWorkspaceName
-  location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
-}
-
-resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: applicationInsightsName
-  location: location
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logAnalyticsWorkspace.id
+module loggingResources './modules/logging.bicep' = {
+  name: 'loggingResources'
+  params: {
+    location: location
+    logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
+    applicationInsightsName: applicationInsightsName
   }
 }
 
@@ -348,7 +336,7 @@ resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-0
   scope: oaiAccount
   name: '${openAiAccountName}-diags'
   properties: {
-    workspaceId: logAnalyticsWorkspace.id
+    workspaceId: loggingResources.outputs.logAnalyticsWorkspaceId
     logs: [
       {
         categoryGroup: 'allLogs'
@@ -513,8 +501,7 @@ resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview'
     loggerType: 'applicationInsights'
     resourceId: applicationInsights.id
     credentials: {
-      instrumentationKey: applicationInsights.properties.InstrumentationKey
-    }
+      instrumentationKey: loggingResources.outputs.appInsightsInstrumentationKey
     isBuffered: true
   }
 }
