@@ -149,86 +149,15 @@ var deployments = [
   }
 ]
 
-resource basicNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
-  name: 'nsg-basic-oai-demo'
-  location: location
-  properties: {
-    securityRules: []
+module virtualNetwork './modules/virtualnetwork.bicep' = {
+  name: 'virtualNetwork'
+  params: { 
+    location: location
+    virtualNetworkName: virtualNetworkName
+    bastionHostName: bastionHostName
   }
 }
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
-  name: virtualNetworkName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        '10.0.0.0/24'
-      ]
-    }
-    subnets: [
-      {
-        name: 'OpenAI'
-        properties: {
-          addressPrefix: '10.0.0.0/27'
-          networkSecurityGroup: {
-            id: basicNSG.id
-          }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'VMs'
-        properties: {
-          addressPrefix: '10.0.0.32/28'
-          networkSecurityGroup: {
-            id: basicNSG.id
-          }
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'APIM'
-        properties: {
-          addressPrefix: '10.0.0.64/27'
-          networkSecurityGroup: {
-            id: apimNSG.id
-          }
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'PrivateEndpoints'
-        properties: {
-          addressPrefix: '10.0.0.128/27'
-          networkSecurityGroup: {
-            id: basicNSG.id
-          }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-      {
-        name: 'AzureBastionSubnet'
-        properties: {
-          addressPrefix: '10.0.0.192/26'
-          networkSecurityGroup: {
-            id: bastionNSG.id
-          }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Disabled'
-        }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
-      }
-    ]
-    virtualNetworkPeerings: []
-  }
-}
-
-// Log Analytics Workspace and Application Insights resources
 module loggingResources './modules/logging.bicep' = {
   name: 'loggingResources'
   params: {
@@ -285,7 +214,7 @@ resource oaiPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetwork
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: virtualNetwork.id
+      id: virtualNetwork.outputs.virtualNetworkId
     }
   }
 }
@@ -312,7 +241,7 @@ resource oaiPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
     ]
     customNetworkInterfaceName: '${oaiPrivateEndpointName}-nic'
     subnet: {
-      id: '${virtualNetwork.id}/subnets/OpenAI'
+      id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/OpenAI'
     }
   }
 }
@@ -410,7 +339,7 @@ resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
     ]
     customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
     subnet: {
-      id: '${virtualNetwork.id}/subnets/PrivateEndpoints'
+      id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/PrivateEndpoints'
     }
   }
 }
@@ -431,7 +360,7 @@ resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkL
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: virtualNetwork.id
+      id: virtualNetwork.outputs.virtualNetworkId
     }
   }
 }
@@ -467,7 +396,7 @@ resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
     publisherName: apimPublisherName
     virtualNetworkType: 'Internal'
     virtualNetworkConfiguration: {
-      subnetResourceId: '${virtualNetwork.id}/subnets/APIM'
+      subnetResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
     }
   }
 }
@@ -499,9 +428,10 @@ resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview'
   name: 'appInsightsLogger'
   properties: {
     loggerType: 'applicationInsights'
-    resourceId: applicationInsights.id
+    resourceId: loggingResources.outputs.applicationInsightsId
     credentials: {
-      instrumentationKey: loggingResources.outputs.appInsightsInstrumentationKey
+      instrumentationKey: loggingResources.outputs.applicationInsightsInstrumentationKey
+    }
     isBuffered: true
   }
 }
@@ -566,7 +496,7 @@ resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetwor
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: virtualNetwork.id
+      id: virtualNetwork.outputs.virtualNetworkId
     }
   }
 }
@@ -652,7 +582,7 @@ resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: '${virtualNetwork.id}/subnets/VMs'
+            id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/VMs'
           }
         }
       }
@@ -744,7 +674,7 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2022-07-01' = {
       {
         properties: {
           subnet: {
-            id: '${virtualNetwork.id}/subnets/AzureBastionSubnet'
+            id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/AzureBastionSubnet'
           }
           publicIPAddress: {
             id: bastionPublicIP.id
@@ -752,144 +682,6 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2022-07-01' = {
           privateIPAllocationMethod: 'Dynamic'
         }
         name: 'ipconfig1'
-      }
-    ]
-  }
-}
-
-resource bastionNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
-  name: 'nsg-${bastionHostName}'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'AllowHttpsInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'Internet'
-          destinationPortRange: '443'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 100
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'AllowGatewayManagerInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'GatewayManager'
-          destinationPortRange: '443'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 110
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'AllowLoadBalancerInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'AzureLoadBalancer'
-          destinationPortRange: '443'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 120
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'AllowBastionHostCommunicationInBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationPortRanges: [
-            '8080'
-            '5701'
-          ]
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 130
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'DenyAllInBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationPortRange: '*'
-          destinationAddressPrefix: '*'
-          access: 'Deny'
-          priority: 1000
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'AllowSshRdpOutBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationPortRanges: [
-            '22'
-            '3389'
-          ]
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 100
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'AllowAzureCloudCommunicationOutBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationPortRange: '443'
-          destinationAddressPrefix: 'AzureCloud'
-          access: 'Allow'
-          priority: 110
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'AllowBastionHostCommunicationOutBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationPortRanges: [
-            '8080'
-            '5701'
-          ]
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 120
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'AllowGetSessionInformationOutBound'
-        properties: {
-          protocol: '*'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: 'Internet'
-          destinationPortRanges: [
-            '80'
-            '443'
-          ]
-          access: 'Allow'
-          priority: 130
-          direction: 'Outbound'
-        }
       }
     ]
   }
