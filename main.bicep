@@ -151,7 +151,7 @@ var deployments = [
 
 module virtualNetwork './modules/virtualnetwork.bicep' = {
   name: 'virtualNetwork'
-  params: { 
+  params: {
     location: location
     virtualNetworkName: virtualNetworkName
     bastionHostName: bastionHostName
@@ -167,117 +167,26 @@ module loggingResources './modules/logging.bicep' = {
   }
 }
 
-// OpenAI Account resources
-resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
-  name: openAiAccountName
-  location: location
-  kind: 'OpenAI'
-  properties: {
-    customSubDomainName: oaiCustomSubDomainName
-    publicNetworkAccess: 'Disabled'
-  }
-  sku: {
-    name: oaiSku
+module oaiAccount './modules/openai.bicep' = {
+  name: 'oaiAccount'
+  params: {
+    location: location
+    openAiAccountName: openAiAccountName
+    oaiCustomSubDomainName: oaiCustomSubDomainName
+    oaiSku: oaiSku
+    deployments: deployments
+    logAnalyticsWorkspaceId: loggingResources.outputs.logAnalyticsWorkspaceId
+    oaiPrivateDnsZoneName: oaiPrivateDnsZoneName
+    oaiPrivateEndpointName: oaiPrivateEndpointName
+    virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
+    keyVaultName: keyVaultName
   }
   dependsOn: [
     virtualNetwork
   ]
 }
 
-@batchSize(1)
-resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = [for deployment in deployments: {
-  parent: oaiAccount
-  name: deployment.name
-  properties: {
-    model: deployment.model
-    raiPolicyName: contains(deployment, 'raiPolicyName') ? deployment.raiPolicyName : null
-  }
-  sku: contains(deployment, 'sku') ? deployment.sku : {
-    name: 'Standard'
-    capacity: 20
-  }
-}]
 
-resource oaiPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'privatelink.openai.azure.com'
-  location: 'global'
-  properties: {}
-  dependsOn: [
-    virtualNetwork
-  ]
-}
-
-resource oaiPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: oaiPrivateDnsZone
-  name: '${oaiPrivateDnsZoneName}-link'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: virtualNetwork.outputs.virtualNetworkId
-    }
-  }
-}
-
-resource oaiPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
-  name: oaiPrivateEndpointName
-  location: location
-  properties: {
-    privateLinkServiceConnections: [
-      {
-        name: '${oaiPrivateEndpointName}-connection'
-        properties: {
-          privateLinkServiceId: oaiAccount.id
-          groupIds: [
-            'account'
-          ]
-          privateLinkServiceConnectionState: {
-            status: 'Approved'
-            description: 'Approved'
-            actionsRequired: 'None'
-          }
-        }
-      }
-    ]
-    customNetworkInterfaceName: '${oaiPrivateEndpointName}-nic'
-    subnet: {
-      id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/OpenAI'
-    }
-  }
-}
-
-resource oaiPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-  parent: oaiPrivateEndpoint
-  name: 'default'
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'config1'
-        properties: {
-          privateDnsZoneId: oaiPrivateDnsZone.id
-        }
-      }
-    ]
-  }
-}
-
-resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: oaiAccount
-  name: '${openAiAccountName}-diags'
-  properties: {
-    workspaceId: loggingResources.outputs.logAnalyticsWorkspaceId
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
-        retentionPolicy: {
-          enabled: true
-          days: 90
-        }
-      }
-    ]
-  }
-}
 
 // Key Vault Resources
 resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
@@ -306,14 +215,6 @@ resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-pr
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
     principalId: apim.identity.principalId
     principalType: 'ServicePrincipal'
-  }
-}
-
-resource oaiAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
-  parent: kv
-  name: 'oaiAccountKey'
-  properties: {
-    value: oaiAccount.listKeys().key1
   }
 }
 
