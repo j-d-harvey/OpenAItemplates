@@ -46,6 +46,13 @@ param apimPublisherEmail string
 @minLength(1)
 param apimPublisherName string
 
+@description('The pricing tier of the API Management service')
+@allowed([
+  'Internal'
+  'External'
+])
+param apimVNetMode string = 'Internal'
+
 @description('Name of the API Management Private DNS Zone')
 param apimPrivateDnsZoneName string = 'azure-api.net'
 
@@ -229,6 +236,7 @@ module apiManagement './modules/apimanagement/apimanagement.bicep' = {
     managedIdentityClientId: keyVault.outputs.managedIdentityClientId
     keyVaultUri: keyVault.outputs.keyVaultUri
     openaiKeyVaultSecretName: oaiPrimaryKeySecretName
+    apimVNetMode: apimVNetMode
     virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
     apimSubentResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
   }

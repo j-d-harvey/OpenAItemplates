@@ -12,6 +12,7 @@ param managedIdentityId string
 param managedIdentityClientId string
 param keyVaultUri string
 param openaiKeyVaultSecretName string
+param apimVNetMode string
 param virtualNetworkId string
 param apimSubentResourceId string
 
@@ -38,7 +39,7 @@ resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
   properties: {
     publisherEmail: apimPublisherEmail
     publisherName: apimPublisherName
-    virtualNetworkType: 'Internal'
+    virtualNetworkType: apimVNetMode
     virtualNetworkConfiguration: {
       subnetResourceId: apimSubentResourceId
     }
