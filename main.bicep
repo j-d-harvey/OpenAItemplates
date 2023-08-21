@@ -88,20 +88,20 @@ param vmName string = 'vm-oai-demo'
 ])
 param securityType string = 'Standard'
 
+@description('Specifies the name of the key vault.')
+param keyVaultName string = 'kv-${uniqueString(resourceGroup().id)}'
+
 @description('Name of the Key Vault Private DNS Zone')
 param kvPrivateDnsZoneName string = 'privatelink.vaultcore.azure.net'
 
 @description('Name of the Key Vault Private Endpoint')
 param kvPrivateEndpointName string = 'kvPrivateEndpoint'
 
-@description('Specifies the name of the key vault.')
-param keyVaultName string = 'kv-${uniqueString(resourceGroup().id)}'
-
 @description('Azure Active Directory tenant ID that should be used for authenticating requests to the key vault')
 param tenantId string = subscription().tenantId
 
 @description('SKU of the key vault.')
-param kvSkuName string = 'standard'
+param keyVaultSku string = 'standard'
 
 @description('Name of the Log Analytics account')
 param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}'
@@ -158,13 +158,35 @@ module virtualNetwork './modules/virtualnetwork.bicep' = {
   }
 }
 
+module keyVault './modules/keyvault.bicep' = {
+  name: 'keyVault'
+  params: {
+    location: location
+    keyVaultName: keyVaultName
+    kvPrivateDnsZoneName: kvPrivateDnsZoneName
+    kvPrivateEndpointName: kvPrivateEndpointName
+    tenantId: tenantId
+    keyVaultSku: keyVaultSku
+    apimRoleDefinitionId: apimRoleDefinitionId
+    apimName: apimName
+    virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
+  }
+  dependsOn: [
+    virtualNetwork
+  ]
+}
+
 module loggingResources './modules/logging.bicep' = {
   name: 'loggingResources'
   params: {
     location: location
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
     applicationInsightsName: applicationInsightsName
+    keyVaultName: keyVaultName
   }
+  dependsOn: [
+    keyVault, virtualNetwork
+  ]
 }
 
 module oaiAccount './modules/openai.bicep' = {
@@ -186,289 +208,21 @@ module oaiAccount './modules/openai.bicep' = {
   ]
 }
 
-
-
-// Key Vault Resources
-resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
-  name: keyVaultName
-  location: location
-  properties: {
-    tenantId: tenantId
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 90
-    sku: {
-      name: kvSkuName
-      family: 'A'
-    }
-    networkAcls: {
-      defaultAction: 'Deny'
-      bypass: 'AzureServices'
-    }
-  }
-}
-
-resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
-  name: guid(apimRoleDefinitionId, apim.id, kv.id)
-  scope: kv
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
-    principalId: apim.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
-  name: kvPrivateEndpointName
-  location: location
-  properties: {
-    privateLinkServiceConnections: [
-      {
-        name: '${kvPrivateEndpointName}-connection'
-        properties: {
-          privateLinkServiceId: kv.id
-          groupIds: [
-            'vault'
-          ]
-          privateLinkServiceConnectionState: {
-            status: 'Approved'
-            description: 'Approved'
-            actionsRequired: 'None'
-          }
-        }
-      }
-    ]
-    customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
-    subnet: {
-      id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/PrivateEndpoints'
-    }
-  }
-}
-
-resource kvPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: kvPrivateDnsZoneName
-  location: 'global'
-  properties: {}
-  dependsOn: [
-    virtualNetwork
-  ]
-}
-
-resource kvPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: kvPrivateDnsZone
-  name: '${kvPrivateDnsZoneName}-link'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: virtualNetwork.outputs.virtualNetworkId
-    }
-  }
-}
-
-resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-  parent: kvPrivateEndpoint
-  name: 'default'
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'config1'
-        properties: {
-          privateDnsZoneId: kvPrivateDnsZone.id
-        }
-      }
-    ]
-  }
-}
-
-// API Management Resources
-resource apim 'Microsoft.ApiManagement/service@2023-03-01-preview' = {
-  name: apimName
-  location: location
-  sku: {
-    name: apimSku
-    capacity: apimCapacity
-  }
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    publisherEmail: apimPublisherEmail
-    publisherName: apimPublisherName
-    virtualNetworkType: 'Internal'
-    virtualNetworkConfiguration: {
-      subnetResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
-    }
-  }
-}
-
-resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
-  name: 'nsg-apim-oai-demo'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'AllowManagementEndpointInBound'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: 'ApiManagement'
-          destinationPortRange: '3443'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 100
-          direction: 'Inbound'
-        }
-      }
-    ]
-  }
-}
-
-resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
-  parent: apim
-  name: 'appInsightsLogger'
-  properties: {
-    loggerType: 'applicationInsights'
-    resourceId: loggingResources.outputs.applicationInsightsId
-    credentials: {
-      instrumentationKey: loggingResources.outputs.applicationInsightsInstrumentationKey
-    }
-    isBuffered: true
-  }
-}
-
-resource apimDiagnostics 'Microsoft.ApiManagement/service/diagnostics@2023-03-01-preview' = {
-  parent: apim
-  name: 'applicationinsights'
-  properties: {
-    alwaysLog: 'allErrors'
-    httpCorrelationProtocol: 'W3C'
-    verbosity: 'information'
-    logClientIp: true
-    loggerId: apimLogger.id
-    sampling: {
-      samplingType: 'fixed'
-      percentage: 100
-    }
-    frontend: {
-      request: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-      response: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-    }
-    backend: {
-      request: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-      response: {
-        headers: []
-        body: {
-          bytes: 8192
-        }
-      }
-    }
-  }
-}
-
-resource apimPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: apimPrivateDnsZoneName
-  location: 'global'
-  properties: {}
-  dependsOn: [
-    virtualNetwork
-  ]
-}
-
-resource apimPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: apimPrivateDnsZone
-  name: '${apimPrivateDnsZoneName}-link'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: virtualNetwork.outputs.virtualNetworkId
-    }
-  }
-}
-
-resource apimPortalDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
-  parent: apimPrivateDnsZone
-  name: '${apimName}.portal'
-  location: 'global'
-  properties: {
-    ttl: 36000
-    aRecords: [
-      {
-        ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-    ]
-  }
-}
-
-resource apimDeveloperDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
-  parent: apimPrivateDnsZone
-  name: '${apimName}.developer'
-  location: 'global'
-  properties: {
-    ttl: 36000
-    aRecords: [
-      {
-        ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-    ]
-  }
-}
-
-resource apimManagementDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
-  parent: apimPrivateDnsZone
-  name: '${apimName}.management'
-  location: 'global'
-  properties: {
-    ttl: 36000
-    aRecords: [
-      {
-        ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-    ]
-  }
-}
-
-resource apimScmDnsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
-  parent: apimPrivateDnsZone
-  name: '${apimName}.scm'
-  location: 'global'
-  properties: {
-    ttl: 36000
-    aRecords: [
-      {
-        ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-    ]
-  }
-}
-
-resource apimDnsRecord2 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (true) {
-  parent: apimPrivateDnsZone
-  name: apimName
-  location: 'global'
-  properties: {
-    ttl: 36000
-    aRecords: [
-      {
-        ipv4Address: apim.properties.privateIPAddresses[0]
-      }
-    ]
+module apiManagement './modules/apimanagement.bicep' = {
+  name: 'apiManagement'
+  params: {
+    location: location
+    apimName: apimName
+    apimSku: apimSku
+    apimCapacity: apimCapacity
+    apimPublisherEmail: apimPublisherEmail
+    apimPublisherName: apimPublisherName
+    apimPrivateDnsZoneName: apimPrivateDnsZoneName
+    applicationInsightsName: applicationInsightsName
+    applicationInsightsId: loggingResources.outputs.applicationInsightsId
+    managedIdentityId: keyVault.outputs.managedIdentityId
+    virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
+    apimSubentResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
   }
 }
 

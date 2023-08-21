@@ -1,6 +1,7 @@
 param location string
 param logAnalyticsWorkspaceName string
 param applicationInsightsName string
+param keyVaultName string
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
@@ -23,6 +24,16 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
+  name: keyVaultName
+  
+  resource secret 'secrets' = {
+    name: 'ApplicationInsightsInstrumentationKey'
+    properties: {
+      value: applicationInsights.properties.InstrumentationKey
+    }
+  }
+}
+
 output logAnalyticsWorkspaceId string = logAnalyticsWorkspace.id
 output applicationInsightsId string = applicationInsights.id
-output applicationInsightsInstrumentationKey string = applicationInsights.properties.InstrumentationKey
