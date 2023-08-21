@@ -8,6 +8,7 @@ param virtualNetworkId string
 param oaiPrivateDnsZoneName string
 param oaiPrivateEndpointName string
 param keyVaultName string
+param oaiPrimaryKeySecretName string
 
 
 resource oaiAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
@@ -119,7 +120,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
   name: keyVaultName
   
   resource secret 'secrets' = {
-    name: 'OpenAIPrimaryKey'
+    name: oaiPrimaryKeySecretName
     properties: {
       value: oaiAccount.listKeys().key1
     }
@@ -127,3 +128,4 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
 }
 
 output oaiAccountId string = oaiAccount.id 
+output openAiEndpoint string = oaiAccount.properties.endpoint

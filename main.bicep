@@ -10,6 +10,9 @@ param oaiCustomSubDomainName string = 'oai-${uniqueString(resourceGroup().id)}'
 @description('SKU for the Azure OpenAI account')
 param oaiSku string = 'S0'
 
+@description('Name of the Azure OpenAI Primary Key Secret for the Key Vault')
+param oaiPrimaryKeySecretName string = 'OpenAIPrimaryKey'
+
 @description('Tokens per Minute Rate Limit (thousands)')
 param embeddingsDeploymentCapacity int = 1
 
@@ -202,13 +205,14 @@ module oaiAccount './modules/openai.bicep' = {
     oaiPrivateEndpointName: oaiPrivateEndpointName
     virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
     keyVaultName: keyVaultName
+    oaiPrimaryKeySecretName: oaiPrimaryKeySecretName
   }
   dependsOn: [
     virtualNetwork
   ]
 }
 
-module apiManagement './modules/apimanagement.bicep' = {
+module apiManagement './modules/apimanagement/apimanagement.bicep' = {
   name: 'apiManagement'
   params: {
     location: location
@@ -217,10 +221,14 @@ module apiManagement './modules/apimanagement.bicep' = {
     apimCapacity: apimCapacity
     apimPublisherEmail: apimPublisherEmail
     apimPublisherName: apimPublisherName
+    openAiEndpoint: '${oaiAccount.outputs.openAiEndpoint}/openai'
     apimPrivateDnsZoneName: apimPrivateDnsZoneName
     applicationInsightsName: applicationInsightsName
     applicationInsightsId: loggingResources.outputs.applicationInsightsId
     managedIdentityId: keyVault.outputs.managedIdentityId
+    managedIdentityClientId: keyVault.outputs.managedIdentityClientId
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    openaiKeyVaultSecretName: oaiPrimaryKeySecretName
     virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
     apimSubentResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
   }

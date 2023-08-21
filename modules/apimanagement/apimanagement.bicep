@@ -4,12 +4,19 @@ param apimSku string
 param apimCapacity int
 param apimPublisherEmail string
 param apimPublisherName string
+param openAiEndpoint string
 param apimPrivateDnsZoneName string
 param applicationInsightsName string
 param applicationInsightsId string
 param managedIdentityId string
+param managedIdentityClientId string
+param keyVaultUri string
+param openaiKeyVaultSecretName string
 param virtualNetworkId string
 param apimSubentResourceId string
+
+var openAINamedValue = 'openai-primary-key'
+var openAiApiBackend = 'openai-backend'
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: applicationInsightsName
@@ -58,6 +65,62 @@ resource apimNSG 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {
       }
     ]
   }
+}
+
+resource apimOpenaiApi 'Microsoft.ApiManagement/service/apis@2023-03-01-preview' = {
+  name: 'azure-openai-service-api'
+  parent: apim
+  properties: {
+    path: 'openai'
+    apiRevision: '1'
+    displayName: 'Azure OpenAI Service API'
+    subscriptionRequired: true
+    format: 'openapi+json'
+    value: loadJsonContent('./openapi_spec.json')
+    protocols: [
+      'https'
+    ]
+  }
+}
+
+resource openAiBackend 'Microsoft.ApiManagement/service/backends@2021-08-01' = {
+  name: openAiApiBackend
+  parent: apim
+  properties: {
+    description: openAiApiBackend
+    url: openAiEndpoint
+    protocol: 'http'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+  }
+}
+
+resource openaiApiKeyNamedValue 'Microsoft.ApiManagement/service/namedValues@2022-08-01' = {
+  name: openAINamedValue
+  parent: apim
+  properties: {
+    displayName: openAINamedValue
+    secret: true
+    keyVault:{
+      secretIdentifier: '${keyVaultUri}secrets/${openaiKeyVaultSecretName}'
+      identityClientId: managedIdentityClientId
+    }
+  }
+}
+
+resource openaiPolicy 'Microsoft.ApiManagement/service/apis/policies@2022-08-01' = {
+  name: 'policy'
+  parent: apimOpenaiApi
+  properties: {
+    value: loadTextContent('./openai_policy.xml')
+    format: 'rawxml'
+  }
+  dependsOn: [
+    openAiBackend
+    openaiApiKeyNamedValue
+  ]
 }
 
 resource apimLogger 'Microsoft.ApiManagement/service/loggers@2023-03-01-preview' = {
@@ -201,4 +264,3 @@ resource apimDnsRecord2 'Microsoft.Network/privateDnsZones/A@2020-06-01' = if (t
 }
 
 output apiManagementId string = apim.id
-output apiMangementPrincipalId string = apim.identity.principalId

@@ -103,4 +103,6 @@ resource kvPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZon
 }
 
 output keyVaultId string = keyVault.id
+output keyVaultUri string = keyVault.properties.vaultUri
 output managedIdentityId string = managedIdentity.id
+output managedIdentityClientId string = managedIdentity.properties.clientId
