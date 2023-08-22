@@ -36,6 +36,10 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2022-03-01' = {
       computerName: vmName
       adminUsername: vmAdminUsername
       adminPassword: vmAdminPassword
+      windowsConfiguration: {
+        provisionVMAgent: true
+        enableAutomaticUpdates: true
+      }
     }
     storageProfile: {
       imageReference: {
