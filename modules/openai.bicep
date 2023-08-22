@@ -128,4 +128,4 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
 }
 
 output oaiAccountId string = oaiAccount.id 
-output openAiEndpoint string = oaiAccount.properties.endpoint
+output openAiEndpoint string = '${oaiAccount.properties.endpoint}/openai'

@@ -3,9 +3,10 @@ param keyVaultName string
 param tenantId string
 param keyVaultSku string
 param apimName string
-param apimRoleDefinitionId string
+param keyVaultRoleDefinitionId string
 param kvPrivateEndpointName string
 param virtualNetworkId string
+param subnetId string
 param kvPrivateDnsZoneName string
 
 resource keyVault 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
@@ -33,7 +34,7 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-
 }
 
 resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
-  name: guid(apimRoleDefinitionId, managedIdentity.id, keyVault.id)
+  name: guid(keyVaultRoleDefinitionId, managedIdentity.id, keyVault.id)
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
@@ -64,7 +65,7 @@ resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2022-11-01' = {
     ]
     customNetworkInterfaceName: '${kvPrivateEndpointName}-nic'
     subnet: {
-      id: '${virtualNetworkId}/subnets/PrivateEndpoints'
+      id: subnetId
     }
   }
 }

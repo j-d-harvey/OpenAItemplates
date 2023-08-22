@@ -119,19 +119,7 @@ param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}
 @description('Name of the Log Analytics account')
 param applicationInsightsName string = 'appi-oai-demo'
 
-var securityProfileJson = {
-  uefiSettings: {
-    secureBootEnabled: true
-    vTpmEnabled: true
-  }
-  securityType: securityType
-}
-var extensionName = 'GuestAttestation'
-var extensionPublisher = 'Microsoft.Azure.Security.WindowsAttestation'
-var extensionVersion = '1.0'
-var maaTenantName = 'GuestAttestation'
-var maaEndpoint = substring('emptyString', 0, 0)
-var apimRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
+var keyVaultRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
 var embeddingsDeployment = empty(embeddingsModelName) ? 'ada' : embeddingsModelName
 var chatGptDeployment = empty(chatGptModelName) ? 'chat' : chatGptModelName
 var deployments = [
@@ -177,9 +165,10 @@ module keyVault './modules/keyvault.bicep' = {
     kvPrivateEndpointName: kvPrivateEndpointName
     tenantId: tenantId
     keyVaultSku: keyVaultSku
-    apimRoleDefinitionId: apimRoleDefinitionId
+    keyVaultRoleDefinitionId: keyVaultRoleDefinitionId
     apimName: apimName
     virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
+    subnetId: virtualNetwork.outputs.privateEndpointsSubnetId
   }
   dependsOn: [
     virtualNetwork
@@ -228,7 +217,7 @@ module apiManagement './modules/apimanagement/apimanagement.bicep' = {
     apimCapacity: apimCapacity
     apimPublisherEmail: apimPublisherEmail
     apimPublisherName: apimPublisherName
-    openAiEndpoint: '${oaiAccount.outputs.openAiEndpoint}/openai'
+    openAiEndpoint: oaiAccount.outputs.openAiEndpoint
     apimPrivateDnsZoneName: apimPrivateDnsZoneName
     applicationInsightsName: applicationInsightsName
     applicationInsightsId: loggingResources.outputs.applicationInsightsId
@@ -238,7 +227,7 @@ module apiManagement './modules/apimanagement/apimanagement.bicep' = {
     openaiKeyVaultSecretName: oaiPrimaryKeySecretName
     apimVNetMode: apimVNetMode
     virtualNetworkId: virtualNetwork.outputs.virtualNetworkId
-    apimSubentResourceId: '${virtualNetwork.outputs.virtualNetworkId}/subnets/APIM'
+    apimSubentResourceId: virtualNetwork.outputs.apimSubnetId
   }
 }
 
@@ -247,13 +236,6 @@ module virtualMachine 'modules/virtualmachine.bicep' = {
   params: {
     location: location
     OSVersion: OSVersion
-    extensionName: extensionName
-    extensionPublisher: extensionPublisher
-    extensionVersion: '1.0'
-    maaEndpoint: maaEndpoint
-    maaTenantName: maaTenantName
-    securityProfileJson: securityProfileJson
-    securityType: securityType
     vmAdminPassword: vmAdminPassword
     vmAdminUsername: vmAdminUsername
     vmName: vmName
@@ -262,89 +244,6 @@ module virtualMachine 'modules/virtualmachine.bicep' = {
   }
 }
 
-/*// Virtual Machine Resources
-resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
-  name: '${vmName}-nic'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/VMs'
-          }
-        }
-      }
-    ]
-  }
-}
-
-resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
-  name: vmName
-  location: location
-  properties: {
-    hardwareProfile: {
-      vmSize: vmSize
-    }
-    osProfile: {
-      computerName: vmName
-      adminUsername: vmAdminUsername
-      adminPassword: vmAdminPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'microsoftwindowsdesktop'
-        offer: 'windows-11'
-        sku: OSVersion
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: {
-          storageAccountType: 'StandardSSD_LRS'
-        }
-      }
-      dataDisks: []
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: vmNic.id
-        }
-      ]
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: false
-      }
-    }
-    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : null)
-  }
-}
-
-resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = if ((securityType == 'TrustedLaunch') && ((securityProfileJson.uefiSettings.secureBootEnabled == true) && (securityProfileJson.uefiSettings.vTpmEnabled == true))) {
-  parent: vm
-  name: extensionName
-  location: location
-  properties: {
-    publisher: extensionPublisher
-    type: extensionName
-    typeHandlerVersion: extensionVersion
-    autoUpgradeMinorVersion: true
-    enableAutomaticUpgrade: true
-    settings: {
-      AttestationConfig: {
-        MaaSettings: {
-          maaEndpoint: maaEndpoint
-          maaTenantName: maaTenantName
-        }
-      }
-    }
-  }
-}
-*/
 //Bastion Host Resources
 resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
   name: 'pip-${bastionHostName}'
@@ -365,7 +264,7 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2022-07-01' = {
       {
         properties: {
           subnet: {
-            id: '${virtualNetwork.outputs.virtualNetworkId}/subnets/AzureBastionSubnet'
+            id: virtualNetwork.outputs.bastionSubnetId
           }
           publicIPAddress: {
             id: bastionPublicIP.id

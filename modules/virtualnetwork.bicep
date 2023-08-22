@@ -242,7 +242,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-11-01' = {
 }
 
 output virtualNetworkId string = virtualNetwork.id
-output azureBastionSubnetId string = resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkName, 'AzureBastionSubnet')
+output bastionSubnetId string = resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkName, 'AzureBastionSubnet')
 output virtualMachinesSubnetId string = resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkName, 'VirtualMachines')
 output apimSubnetId string = resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkName, 'APIM')
 output privateEndpointsSubnetId string = resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkName, 'PrivateEndpoints')
