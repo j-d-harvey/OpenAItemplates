@@ -242,7 +242,27 @@ module apiManagement './modules/apimanagement/apimanagement.bicep' = {
   }
 }
 
-// Virtual Machine Resources
+module virtualMachine 'modules/virtualmachine.bicep' = {
+  name: 'virtualMachine'
+  params: {
+    location: location
+    OSVersion: OSVersion
+    extensionName: extensionName
+    extensionPublisher: extensionPublisher
+    extensionVersion: '1.0'
+    maaEndpoint: maaEndpoint
+    maaTenantName: maaTenantName
+    securityProfileJson: securityProfileJson
+    securityType: securityType
+    vmAdminPassword: vmAdminPassword
+    vmAdminUsername: vmAdminUsername
+    vmName: vmName
+    vmSize: vmSize
+    virtualMachinesSubnetId: virtualNetwork.outputs.virtualMachinesSubnetId
+  }
+}
+
+/*// Virtual Machine Resources
 resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
   name: '${vmName}-nic'
   location: location
@@ -324,7 +344,7 @@ resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' =
     }
   }
 }
-
+*/
 //Bastion Host Resources
 resource bastionPublicIP 'Microsoft.Network/publicIPAddresses@2022-07-01' = {
   name: 'pip-${bastionHostName}'
