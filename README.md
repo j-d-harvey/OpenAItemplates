@@ -19,9 +19,15 @@ languages:
 
 [![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fj-d-harvey%2FOpenAItemplates%2Fmain%2Fazuredeploy.json)
 
-This template deploys a sample environment that demonstrates much of the guidance in the [Implement logging and monitoring for Azure OpenAI models reference architecture](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/ai/log-monitor-azure-openai)
+This template deploys a sample environment that demonstrates much of the guidance in the [Implement logging and monitoring for Azure OpenAI models reference architecture](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/ai/log-monitor-azure-openai) and the [Aure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/t5/azure-architecture-blog/azure-openai-landing-zone-reference-architecture/ba-p/3882102).
 
-and the [Aure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/t5/azure-architecture-blog/azure-openai-landing-zone-reference-architecture/ba-p/3882102).
+You may also clone the repository and deploy the main.bicep template using the following methods:
+- [VS Code](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deploy-vscode)
+- [Azure CLI](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deploy-cli)
+- [Azure PowerShell](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deploy-powershell)
+- [Azure Cloud Shell](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deploy-cloud-shell?tabs=azure-cli)
+
+The templates may also be deployed as part of a pipeline such as GitHub Actions or Azure DevOps Pipelines.
 
 ## What will be deployed?
 
@@ -36,15 +42,16 @@ and the [Aure OpenAI Landing Zone reference architecture](https://techcommunity.
   - A Private Endpoint linked to the appropriate subnet of the Virtual Network
   - A Private DNS Zone linked to the Virtual Network to enable internal name resolution and connectivity
 - An Application Insights resource
-- An API Management resource for accessing back-end Azure OpenAI endpoints
-  - System Assigned Manged Identity enabled
-  - An Application Insights logger configured for All APIs to capture advanced logging and telemetry for OpenAI API calls
-  - Internal Virtual Network Mode enabled
-  - A Private DNS Zone linked to the Virtual Network to enable internal name resolution and connectivity
+- A User Assigned Managed Identity 
 - A Key Vault configured for Azure role-based access control
-  - A Role Based Access Control assignment for the API Managment managed identity
+  - A Role Based Access Control assignment for the Managed Identity
   - A Key Vault Secrect containing the primary Azure OpenAI Access Key
   - A Private Endpoint linked to the appropriate subnet of the Virtual Network
+  - A Private DNS Zone linked to the Virtual Network to enable internal name resolution and connectivity
+- An API Management resource for accessing back-end Azure OpenAI endpoints
+  - User Assigned Manged Identity enabled
+  - An Application Insights logger configured for All APIs to capture advanced logging and telemetry for OpenAI API calls
+  - Internal Virtual Network Mode enabled
   - A Private DNS Zone linked to the Virtual Network to enable internal name resolution and connectivity
 
 In summary:
@@ -52,7 +59,5 @@ An OpenAI resource with embeddings and GPT model deployments is deployed, and pr
 
 ## Architecture Diagram
 ![img](/azure-openai-architecture.png)
-
-After deployment you can publish the OpenAI enpoint in API management following the API Management Config steps in the [openai-python-enterprise-logging respository](https://github.com/Azure-Samples/openai-python-enterprise-logging#api-management-config).
 
 `Tags: Azure OpenAI, Azure API Management, API Management, Private Endpoint, Microsoft.Network/virtualNetworks, Microsoft.ApiManagement/service, SystemAssigned, Microsoft.Network/privateEndpoints, Microsoft.Network/privateDnsZones, Microsoft.Network/privateDnsZones/virtualNetworkLinks, Microsoft.Network/privateEndpoints/privateDnsZoneGroups`
