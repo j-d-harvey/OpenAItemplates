@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.20.4.51522",
-      "templateHash": "753830832066118659"
+      "templateHash": "7394651723914364252"
     }
   },
   "parameters": {
@@ -195,17 +195,6 @@
       "defaultValue": "vm-oai-demo",
       "metadata": {
         "description": "Name of the virtual machine."
-      }
-    },
-    "securityType": {
-      "type": "string",
-      "defaultValue": "Standard",
-      "allowedValues": [
-        "Standard",
-        "TrustedLaunch"
-      ],
-      "metadata": {
-        "description": "Security Type of the Virtual Machine."
       }
     },
     "keyVaultName": {
@@ -856,9 +845,6 @@
           },
           "applicationInsightsName": {
             "value": "[parameters('applicationInsightsName')]"
-          },
-          "keyVaultName": {
-            "value": "[parameters('keyVaultName')]"
           }
         },
         "template": {
@@ -868,7 +854,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.20.4.51522",
-              "templateHash": "10406027782850087902"
+              "templateHash": "488378747488787886"
             }
           },
           "parameters": {
@@ -880,23 +866,9 @@
             },
             "applicationInsightsName": {
               "type": "string"
-            },
-            "keyVaultName": {
-              "type": "string"
             }
           },
           "resources": [
-            {
-              "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2019-09-01",
-              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'ApplicationInsightsInstrumentationKey')]",
-              "properties": {
-                "value": "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]"
-              ]
-            },
             {
               "type": "Microsoft.OperationalInsights/workspaces",
               "apiVersion": "2022-10-01",
@@ -1257,7 +1229,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.20.4.51522",
-              "templateHash": "14319784103943168933"
+              "templateHash": "10764581264356819478"
             }
           },
           "parameters": {
@@ -2190,7 +2162,7 @@
                 "path": "openai",
                 "apiRevision": "1",
                 "displayName": "Azure OpenAI Service API",
-                "subscriptionRequired": true,
+                "subscriptionRequired": false,
                 "format": "openapi+json",
                 "value": "[variables('$fxv#0')]",
                 "protocols": [
