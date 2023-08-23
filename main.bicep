@@ -91,13 +91,6 @@ param vmSize string = 'Standard_D2s_v5'
 @description('Name of the virtual machine.')
 param vmName string = 'vm-oai-demo'
 
-@description('Security Type of the Virtual Machine.')
-@allowed([
-  'Standard'
-  'TrustedLaunch'
-])
-param securityType string = 'Standard'
-
 @description('Specifies the name of the key vault.')
 param keyVaultName string = 'kv-${uniqueString(resourceGroup().id)}'
 
@@ -181,7 +174,6 @@ module loggingResources './modules/logging.bicep' = {
     location: location
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
     applicationInsightsName: applicationInsightsName
-    keyVaultName: keyVaultName
   }
   dependsOn: [
     keyVault, virtualNetwork

@@ -75,7 +75,7 @@ resource apimOpenaiApi 'Microsoft.ApiManagement/service/apis@2023-03-01-preview'
     path: 'openai'
     apiRevision: '1'
     displayName: 'Azure OpenAI Service API'
-    subscriptionRequired: true
+    subscriptionRequired: false
     format: 'openapi+json'
     value: loadJsonContent('./openapi_spec.json')
     protocols: [
