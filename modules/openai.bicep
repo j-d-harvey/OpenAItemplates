@@ -107,6 +107,10 @@ resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-0
       {
         categoryGroup: 'allLogs'
         enabled: true
+        retentionPolicy: {
+          enabled: false
+          days: 0
+        }
       }
     ]
   }
