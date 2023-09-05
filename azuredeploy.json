@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.20.4.51522",
-      "templateHash": "7394651723914364252"
+      "templateHash": "8162514128453633769"
     }
   },
   "parameters": {
@@ -964,7 +964,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.20.4.51522",
-              "templateHash": "11247052835868881006"
+              "templateHash": "15655091324839573962"
             }
           },
           "parameters": {
@@ -1132,8 +1132,8 @@
                     "categoryGroup": "allLogs",
                     "enabled": true,
                     "retentionPolicy": {
-                      "enabled": true,
-                      "days": 90
+                      "enabled": false,
+                      "days": 0
                     }
                   }
                 ]
