@@ -98,24 +98,6 @@ resource oaiPvtEndpointDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZo
   }
 }
 
-resource openAI_diagnosticsettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  scope: oaiAccount
-  name: '${openAiAccountName}-diags'
-  properties: {
-    workspaceId: logAnalyticsWorkspaceId
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
-        retentionPolicy: {
-          enabled: false
-          days: 0
-        }
-      }
-    ]
-  }
-}
-
 resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
   name: keyVaultName
   
